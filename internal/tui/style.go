@@ -4,34 +4,24 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/goccy/go-yaml"
 )
 
-type Theme string
-
-const (
-	ThemeAscii      Theme = styles.AsciiStyle
-	ThemeAuto       Theme = styles.AutoStyle
-	ThemeDark       Theme = styles.DarkStyle
-	ThemeDracula    Theme = styles.DraculaStyle
-	ThemeTokyoNight Theme = styles.TokyoNightStyle
-	ThemeLight      Theme = styles.LightStyle
-	ThemeNoTTY      Theme = styles.NoTTYStyle
-	ThemePink       Theme = styles.PinkStyle
-)
-
 type SlideStyle struct {
 	LipGlossStyle lipgloss.Style
-	Theme         Theme
+	Theme         ansi.StyleConfig
+	ThemeName     string
 }
 
 type StyleConfig struct {
-	Layout      lipgloss.Style  `yaml:"layout"`
-	Border      lipgloss.Border `yaml:"border"`
-	BorderColor string          `yaml:"border_color"`
-	Theme       Theme           `yaml:"theme"`
+	Layout      lipgloss.Style   `yaml:"layout"`
+	Border      lipgloss.Border  `yaml:"border"`
+	BorderColor string           `yaml:"border_color"`
+	Theme       ansi.StyleConfig `yaml:"theme"`
+	ThemeName   string           `yaml:"theme_name"`
 }
 
 func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
@@ -55,15 +45,25 @@ func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
 
 	s.Border = getBorder(aux.Border)
 	s.BorderColor = aux.BorderColor
-	s.Theme = getTheme(aux.Theme)
+	s.Theme, s.ThemeName = getTheme(aux.Theme)
 
 	return nil
 }
 
 func (s StyleConfig) ApplyStyle(width, height int) SlideStyle {
-	borderColor := "#9999CC" // Blueish
+	defaultBorderColor := "#9999CC" // Blueish
+	borderColor := defaultBorderColor
+
+	if s.Theme.H1.BackgroundColor != nil {
+		borderColor = *s.Theme.H1.BackgroundColor
+	}
+
 	if s.BorderColor != "" {
 		borderColor = s.BorderColor
+	}
+
+	if s.BorderColor == "default" {
+		borderColor = defaultBorderColor
 	}
 
 	style := s.Layout.
@@ -75,6 +75,7 @@ func (s StyleConfig) ApplyStyle(width, height int) SlideStyle {
 	return SlideStyle{
 		LipGlossStyle: style,
 		Theme:         s.Theme,
+		ThemeName:     s.ThemeName,
 	}
 }
 
@@ -148,25 +149,23 @@ func getLayoutPosition(p string) (lipgloss.Position, error) {
 	}
 }
 
-func getTheme(theme string) Theme {
+func getTheme(theme string) (ansi.StyleConfig, string) {
 	switch theme {
 	case "ascii":
-		return ThemeAscii
-	case "auto":
-		return ThemeAuto
+		return styles.ASCIIStyleConfig, "ascii"
 	case "dark":
-		return ThemeDark
+		return styles.DarkStyleConfig, "dark"
 	case "dracula":
-		return ThemeDracula
+		return styles.DraculaStyleConfig, "dracula"
 	case "tokyo-night":
-		return ThemeTokyoNight
+		return styles.TokyoNightStyleConfig, "tokyo-night"
 	case "light":
-		return ThemeLight
+		return styles.LightStyleConfig, "light"
 	case "notty":
-		return ThemeNoTTY
+		return styles.NoTTYStyleConfig, "notty"
 	case "pink":
-		return ThemePink
+		return styles.PinkStyleConfig, "pink"
 	default:
-		return ThemeDark
+		return styles.DarkStyleConfig, "dark"
 	}
 }
