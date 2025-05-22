@@ -4,14 +4,34 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/goccy/go-yaml"
 )
+
+type Theme string
+
+const (
+	ThemeAscii      Theme = styles.AsciiStyle
+	ThemeAuto       Theme = styles.AutoStyle
+	ThemeDark       Theme = styles.DarkStyle
+	ThemeDracula    Theme = styles.DraculaStyle
+	ThemeTokyoNight Theme = styles.TokyoNightStyle
+	ThemeLight      Theme = styles.LightStyle
+	ThemeNoTTY      Theme = styles.NoTTYStyle
+	ThemePink       Theme = styles.PinkStyle
+)
+
+type SlideStyle struct {
+	LipGlossStyle lipgloss.Style
+	Theme         Theme
+}
 
 type StyleConfig struct {
 	Layout      lipgloss.Style  `yaml:"layout"`
 	Border      lipgloss.Border `yaml:"border"`
 	BorderColor string          `yaml:"border_color"`
+	Theme       Theme           `yaml:"theme"`
 }
 
 func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
@@ -19,6 +39,7 @@ func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
 		Layout      string `yaml:"layout"`
 		Border      string `yaml:"border"`
 		BorderColor string `yaml:"border_color"`
+		Theme       string `yaml:"theme"`
 	}{}
 
 	var err error
@@ -34,8 +55,27 @@ func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
 
 	s.Border = getBorder(aux.Border)
 	s.BorderColor = aux.BorderColor
+	s.Theme = getTheme(aux.Theme)
 
 	return nil
+}
+
+func (s StyleConfig) ApplyStyle(width, height int) SlideStyle {
+	borderColor := "#9999CC" // Blueish
+	if s.BorderColor != "" {
+		borderColor = s.BorderColor
+	}
+
+	style := s.Layout.
+		Border(s.Border).
+		BorderForeground(lipgloss.Color(borderColor)).
+		Width(width - 4).
+		Height(height - 2)
+
+	return SlideStyle{
+		LipGlossStyle: style,
+		Theme:         s.Theme,
+	}
 }
 
 func getBorder(border string) lipgloss.Border {
@@ -105,5 +145,28 @@ func getLayoutPosition(p string) (lipgloss.Position, error) {
 		return lipgloss.Bottom, nil
 	default:
 		return 0, fmt.Errorf("invalid position: %s", strings.TrimSpace(p))
+	}
+}
+
+func getTheme(theme string) Theme {
+	switch theme {
+	case "ascii":
+		return ThemeAscii
+	case "auto":
+		return ThemeAuto
+	case "dark":
+		return ThemeDark
+	case "dracula":
+		return ThemeDracula
+	case "tokyo-night":
+		return ThemeTokyoNight
+	case "light":
+		return ThemeLight
+	case "notty":
+		return ThemeNoTTY
+	case "pink":
+		return ThemePink
+	default:
+		return ThemeDark
 	}
 }
