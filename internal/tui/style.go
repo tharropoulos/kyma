@@ -12,16 +12,18 @@ import (
 
 type SlideStyle struct {
 	LipGlossStyle lipgloss.Style
-	Theme         ansi.StyleConfig
-	ThemeName     string
+	Theme         GlamourTheme
+}
+type GlamourTheme struct {
+	Style ansi.StyleConfig
+	Name  string
 }
 
 type StyleConfig struct {
-	Layout      lipgloss.Style   `yaml:"layout"`
-	Border      lipgloss.Border  `yaml:"border"`
-	BorderColor string           `yaml:"border_color"`
-	Theme       ansi.StyleConfig `yaml:"theme"`
-	ThemeName   string           `yaml:"theme_name"`
+	Layout      lipgloss.Style  `yaml:"layout"`
+	Border      lipgloss.Border `yaml:"border"`
+	BorderColor string          `yaml:"border_color"`
+	Theme       GlamourTheme    `yaml:"theme"`
 }
 
 func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
@@ -45,7 +47,7 @@ func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
 
 	s.Border = getBorder(aux.Border)
 	s.BorderColor = aux.BorderColor
-	s.Theme, s.ThemeName = getTheme(aux.Theme)
+	s.Theme = getTheme(aux.Theme)
 
 	return nil
 }
@@ -54,8 +56,8 @@ func (s StyleConfig) ApplyStyle(width, height int) SlideStyle {
 	defaultBorderColor := "#9999CC" // Blueish
 	borderColor := defaultBorderColor
 
-	if s.Theme.H1.BackgroundColor != nil {
-		borderColor = *s.Theme.H1.BackgroundColor
+	if s.Theme.Style.H1.BackgroundColor != nil {
+		borderColor = *s.Theme.Style.H1.BackgroundColor
 	}
 
 	if s.BorderColor != "" {
@@ -75,7 +77,6 @@ func (s StyleConfig) ApplyStyle(width, height int) SlideStyle {
 	return SlideStyle{
 		LipGlossStyle: style,
 		Theme:         s.Theme,
-		ThemeName:     s.ThemeName,
 	}
 }
 
@@ -149,23 +150,23 @@ func getLayoutPosition(p string) (lipgloss.Position, error) {
 	}
 }
 
-func getTheme(theme string) (ansi.StyleConfig, string) {
+func getTheme(theme string) GlamourTheme {
 	switch theme {
 	case "ascii":
-		return styles.ASCIIStyleConfig, "ascii"
+		return GlamourTheme{Style: styles.ASCIIStyleConfig, Name: "ascii"}
 	case "dark":
-		return styles.DarkStyleConfig, "dark"
+		return GlamourTheme{Style: styles.DarkStyleConfig, Name: "dark"}
 	case "dracula":
-		return styles.DraculaStyleConfig, "dracula"
+		return GlamourTheme{Style: styles.DraculaStyleConfig, Name: "dracula"}
 	case "tokyo-night":
-		return styles.TokyoNightStyleConfig, "tokyo-night"
+		return GlamourTheme{Style: styles.TokyoNightStyleConfig, Name: "tokyo-night"}
 	case "light":
-		return styles.LightStyleConfig, "light"
+		return GlamourTheme{Style: styles.LightStyleConfig, Name: "light"}
 	case "notty":
-		return styles.NoTTYStyleConfig, "notty"
+		return GlamourTheme{Style: styles.NoTTYStyleConfig, Name: "notty"}
 	case "pink":
-		return styles.PinkStyleConfig, "pink"
+		return GlamourTheme{Style: styles.PinkStyleConfig, Name: "pink"}
 	default:
-		return styles.DarkStyleConfig, "dark"
+		return GlamourTheme{Style: styles.DarkStyleConfig, Name: "dark"}
 	}
 }

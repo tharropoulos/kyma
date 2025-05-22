@@ -45,7 +45,7 @@ func (s Slide) View() string {
 func (s Slide) view() string {
 	var b strings.Builder
 
-	out, err := glamour.Render(s.Data, string(s.Style.ThemeName))
+	out, err := glamour.Render(s.Data, s.Style.Theme.Name)
 	if err != nil {
 		b.WriteString("\n\n" + lipgloss.NewStyle().
 			Foreground(lipgloss.Color("9")). // Red
