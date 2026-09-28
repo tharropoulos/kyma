@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -12,6 +13,7 @@ import (
 	"github.com/museslabs/kyma/internal/logger"
 	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui"
+	"github.com/museslabs/kyma/internal/tui/transitions"
 )
 
 var docsCmd = &cobra.Command{
@@ -57,6 +59,8 @@ var docsCmd = &cobra.Command{
 			tui.New(root, "presentation.md"),
 			tea.WithAltScreen(),
 			tea.WithMouseAllMotion(),
+			tea.WithOutput(newSyncedOutput(os.Stdout)),
+			tea.WithFPS(transitions.RefreshRate),
 		)
 
 		slog.Info("Starting TUI program")
