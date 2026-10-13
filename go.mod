@@ -65,3 +65,7 @@ require (
 	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )
+
+// Local copy of chafa-go v0.4.1 with TermDbDetect passing a NULL-terminated
+// envp. Drop once the fix is released upstream.
+replace github.com/ploMP4/chafa-go => ./third_party/chafa-go
