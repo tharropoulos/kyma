@@ -5,8 +5,6 @@ import (
 	"strings"
 
 	charmansi "github.com/charmbracelet/x/ansi"
-	ansi "github.com/muesli/reflow/ansi"
-	"github.com/muesli/reflow/truncate"
 	"github.com/muesli/termenv"
 )
 
@@ -79,8 +77,8 @@ func placeOverlay(x, y int, fg, bg string, opts ...WhitespaceOption) string {
 
 		pos := 0
 		if x > 0 {
-			left := truncate.String(bgLine, uint(x))
-			pos = ansi.PrintableRuneWidth(left)
+			left := cutLeft(bgLine, x)
+			pos = charmansi.StringWidth(left)
 			b.WriteString(left)
 			if pos < x {
 				b.WriteString(ws.render(x - pos))
@@ -90,11 +88,11 @@ func placeOverlay(x, y int, fg, bg string, opts ...WhitespaceOption) string {
 
 		fgLine := fgLines[i-y]
 		b.WriteString(fgLine)
-		pos += ansi.PrintableRuneWidth(fgLine)
+		pos += charmansi.StringWidth(fgLine)
 
 		right := charmansi.TruncateLeft(bgLine, pos, "")
-		bgWidth = ansi.PrintableRuneWidth(bgLine)
-		rightWidth := ansi.PrintableRuneWidth(right)
+		bgWidth = charmansi.StringWidth(bgLine)
+		rightWidth := charmansi.StringWidth(right)
 		if rightWidth <= bgWidth-pos {
 			b.WriteString(ws.render(bgWidth - rightWidth - pos))
 		}
@@ -102,6 +100,32 @@ func placeOverlay(x, y int, fg, bg string, opts ...WhitespaceOption) string {
 		b.WriteString(right)
 	}
 
+	return b.String()
+}
+
+// cutLeft returns the first n cells of s, with the style they were drawn in
+// reset after them. Escape codes past the cut are dropped along with the text,
+// so the part of the line the overlay covers cannot leak styles or images
+// into it. Every escape code is measured as x/ansi parses it: reflow ends one
+// at its first letter, which cut the kitty graphics codes slides carry in
+// half and left the terminal swallowing the rest of the screen.
+func cutLeft(s string, n int) string {
+	var (
+		b     strings.Builder
+		state byte
+		width int
+	)
+	for len(s) > 0 {
+		seq, w, read, newState := charmansi.DecodeSequence(s, state, nil)
+		if width+w > n {
+			break
+		}
+		state = newState
+		width += w
+		b.WriteString(seq)
+		s = s[read:]
+	}
+	b.WriteString(charmansi.ResetStyle)
 	return b.String()
 }
 
