@@ -26,7 +26,7 @@ title: Features
 transition: swipeLeft
 style:
   border: hidden
-  theme: dracula
+  theme: dark
 ---
 
 # Features

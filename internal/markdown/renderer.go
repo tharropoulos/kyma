@@ -20,6 +20,12 @@ import (
 // on top of the word wrap width it is configured with.
 const glamourMargin = 2
 
+// proseWidth is the width text, headings and code are laid out in outside a
+// grid: glamour's default 80 column wrap plus its margin. Keeping them narrower
+// than the slide is what leaves the slide's layout room to center or right
+// align them, as a block padded to the slide's full width cannot move.
+const proseWidth = 80 + glamourMargin
+
 type RendererOption func(*Renderer) error
 
 type Renderer struct {
@@ -116,7 +122,12 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 
 	switch n.Kind() {
 	case NodeKindMarkdownRoot:
-		break
+		for _, c := range n.Children() {
+			if err := r.renderNode(c, animating, flowWidth(c, width), height, b); err != nil {
+				return err
+			}
+		}
+		return nil
 
 	case NodeKindGlamour:
 		n := n.(*GlamourNode)
@@ -230,6 +241,18 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 	}
 
 	return nil
+}
+
+// flowWidth is the width a node placed directly on the slide is laid out in.
+// Text, headings and code keep to proseWidth so the slide's layout can align
+// them, while grids fill the slide and images keep the size they asked for.
+func flowWidth(n Node, width int) int {
+	switch n.Kind() {
+	case NodeKindGlamour, NodeKindHeading, NodeKindCodeBlock:
+		return min(width, proseWidth)
+	default:
+		return width
+	}
 }
 
 func WithImageBackend(backend string) RendererOption {

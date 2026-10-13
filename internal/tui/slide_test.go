@@ -46,6 +46,42 @@ func TestSlide_ViewFitsTheFrame(t *testing.T) {
 	}
 }
 
+// TestSlide_LayoutAlignsText checks that a slide's layout moves its text on a
+// terminal wider than the text: center puts it midway between where left and
+// right do, and those two are far apart. Text padded to the slide's full width
+// only shifts by the few cells of glamour's margin.
+func TestSlide_LayoutAlignsText(t *testing.T) {
+	const width, height = 120, 30
+
+	indent := map[string]int{}
+	for _, layout := range []string{"left", "center", "right"} {
+		props, err := config.NewProperties("style:\n  layout: " + layout)
+		if err != nil {
+			t.Fatalf("NewProperties() failed: %v", err)
+		}
+		slide, err := NewSlide("# Title\n\nA short line.", props)
+		if err != nil {
+			t.Fatalf("NewSlide() failed: %v", err)
+		}
+		slide.Style = props.Style.Apply(width, height)
+
+		for _, line := range strings.Split(ansi.Strip(slide.View(false, width, height)), "\n") {
+			if i := strings.Index(line, "A short line."); i >= 0 {
+				indent[layout] = len([]rune(line[:i]))
+			}
+		}
+	}
+
+	left, center, right := indent["left"], indent["center"], indent["right"]
+	if right-left < width/4 || center-left != right-center {
+		t.Errorf(
+			"text starts at column %d for left, %d for center and %d for right, "+
+				"want left and right at least %d apart with center midway",
+			left, center, right, width/4,
+		)
+	}
+}
+
 // TestSlide_MasterLayout runs a slide through the templating layer the way the
 // presentation loader does.
 func TestSlide_MasterLayout(t *testing.T) {
