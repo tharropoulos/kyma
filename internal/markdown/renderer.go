@@ -20,6 +20,13 @@ import (
 // on top of the word wrap width it is configured with.
 const glamourMargin = 2
 
+// proseWidth is how wide a slide's content is drawn, unless the slide is only a
+// grid: what glamour's default 80 column wrap comes out as once its margin is
+// taken. Keeping it narrower than the slide is what leaves the slide's layout
+// room to center or right align it, as a block padded to the slide's full width
+// cannot move.
+const proseWidth = 80 - glamourMargin
+
 type RendererOption func(*Renderer) error
 
 type Renderer struct {
@@ -116,7 +123,43 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 
 	switch n.Kind() {
 	case NodeKindMarkdownRoot:
-		break
+		// A slide that is only a grid, as every master layout is, lays out the
+		// whole slide and fills it. It ends on the grid's last line, as the line
+		// break after it, or the blank lines around its tags, would push a grid
+		// as tall as the slide past its bottom.
+		if onlyGrids(n.Children()) {
+			var grids strings.Builder
+			for _, c := range n.Children() {
+				if c.Kind() == NodeKindGlamour {
+					continue
+				}
+				if err := r.renderNode(c, animating, width, height, &grids); err != nil {
+					return err
+				}
+			}
+			b.WriteString(strings.TrimSuffix(grids.String(), "\n"))
+			return nil
+		}
+
+		// Anything else placed directly on the slide is drawn as wide as one
+		// block, so it lines up and the slide's layout aligns it as a whole, and
+		// to the room glamour's text has once its margin is taken.
+		block := min(width-2*glamourMargin, proseWidth)
+		for _, c := range n.Children() {
+			w := block
+			switch c.Kind() {
+			case NodeKindGlamour, NodeKindHeading:
+				// Glamour leaves its margin out of what it draws.
+				w = block + 2*glamourMargin
+			case NodeKindImage:
+				// An image keeps the size it asked for.
+				w = width
+			}
+			if err := r.renderNode(c, animating, w, height, b); err != nil {
+				return err
+			}
+		}
+		return nil
 
 	case NodeKindGlamour:
 		n := n.(*GlamourNode)
@@ -230,6 +273,23 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 	}
 
 	return nil
+}
+
+// onlyGrids reports whether the nodes placed directly on a slide are grids and
+// nothing else, apart from the blank lines glamour holds around their tags.
+func onlyGrids(nodes []Node) bool {
+	for _, n := range nodes {
+		switch n.Kind() {
+		case NodeKindGrid, NodeKindGridRow, NodeKindGridColumn:
+		case NodeKindGlamour:
+			if strings.TrimSpace(n.(*GlamourNode).Text) != "" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func WithImageBackend(backend string) RendererOption {

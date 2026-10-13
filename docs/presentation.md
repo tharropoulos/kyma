@@ -326,6 +326,52 @@ Rows are as tall as their content until one asks for a share of the slide with
 
 ----
 ---
+title: Full screen grids
+transition: swipeLeft
+image_backend: docs
+---
+
+[grid gap=1]
+[row span=1]
+[col span=2 border=rounded pad="1 2"]
+# Full Screen
+
+A slide that is nothing but a grid takes the whole screen, whatever its
+`layout`. Rows with a `span` share the slide's height, and columns share its
+width.
+
+Write anything outside the grid, even a heading, and the grid keeps to the
+width of the text instead.
+[/col]
+[col]
+[grid gap=1]
+[row span=2 border=rounded pad="0 1"]
+```markdown
+[grid gap=1]
+[row span=1]
+[col span=2]…[/col]
+[col]
+[grid gap=1]
+[row span=2]…[/row]
+[row span=1]…[/row]
+[/grid]
+[/col]
+[/row]
+[/grid]
+```
+[/row]
+[row span=1 border=rounded]
+[col align=center valign=middle]
+`span=1` here, against `span=2` above.
+[/col]
+[/row]
+[/grid]
+[/col]
+[/row]
+[/grid]
+
+----
+---
 title: Layout attributes
 transition: swipeLeft
 image_backend: docs

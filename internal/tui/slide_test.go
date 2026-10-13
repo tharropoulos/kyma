@@ -46,6 +46,121 @@ func TestSlide_ViewFitsTheFrame(t *testing.T) {
 	}
 }
 
+// TestSlide_LayoutAlignsText checks that a slide's layout moves its text on a
+// terminal wider than the text: center puts it midway between where left and
+// right do, and those two are far apart. Text padded to the slide's full width
+// only shifts by the few cells of glamour's margin.
+func TestSlide_LayoutAlignsText(t *testing.T) {
+	const width, height = 120, 30
+
+	indent := map[string]int{}
+	for _, layout := range []string{"left", "center", "right"} {
+		props, err := config.NewProperties("style:\n  layout: " + layout)
+		if err != nil {
+			t.Fatalf("NewProperties() failed: %v", err)
+		}
+		slide, err := NewSlide("# Title\n\nA short line.", props)
+		if err != nil {
+			t.Fatalf("NewSlide() failed: %v", err)
+		}
+		slide.Style = props.Style.Apply(width, height)
+
+		for _, line := range strings.Split(ansi.Strip(slide.View(false, width, height)), "\n") {
+			if i := strings.Index(line, "A short line."); i >= 0 {
+				indent[layout] = len([]rune(line[:i]))
+			}
+		}
+	}
+
+	left, center, right := indent["left"], indent["center"], indent["right"]
+	if right-left < width/4 || center-left != right-center {
+		t.Errorf(
+			"text starts at column %d for left, %d for center and %d for right, "+
+				"want left and right at least %d apart with center midway",
+			left, center, right, width/4,
+		)
+	}
+}
+
+// TestSlide_LayoutAlignsGrid checks where a centered slide puts a grid: in line
+// with the text around it, or across the whole slide when the slide is nothing
+// but the grid, as a master layout is.
+func TestSlide_LayoutAlignsGrid(t *testing.T) {
+	const width, height = 160, 30
+	grid := "[row]\n[col]\nleft column\n[/col]\n[col]\nright column\n[/col]\n[/row]\n"
+
+	indents := func(t *testing.T, body string) map[string]int {
+		t.Helper()
+
+		props, err := config.NewProperties("style:\n  layout: center")
+		if err != nil {
+			t.Fatalf("NewProperties() failed: %v", err)
+		}
+		slide, err := NewSlide(body, props)
+		if err != nil {
+			t.Fatalf("NewSlide() failed: %v", err)
+		}
+		slide.Style = props.Style.Apply(width, height)
+
+		found := map[string]int{}
+		for _, line := range strings.Split(ansi.Strip(slide.View(false, width, height)), "\n") {
+			for _, text := range []string{"Some text.", "left column"} {
+				if i := strings.Index(line, text); i >= 0 {
+					found[text] = len([]rune(line[:i]))
+				}
+			}
+		}
+		return found
+	}
+
+	t.Run("among text", func(t *testing.T) {
+		got := indents(t, "Some text.\n\n"+grid)
+		text, column := got["Some text."], got["left column"]
+		if text < width/4 || column != text {
+			t.Errorf(
+				"text starts at column %d and the grid's text at %d, want both "+
+					"the same and centered past column %d",
+				text, column, width/4,
+			)
+		}
+	})
+
+	t.Run("on its own", func(t *testing.T) {
+		if column := indents(t, grid)["left column"]; column >= width/4 {
+			t.Errorf("grid's text starts at column %d, want the grid to fill the slide", column)
+		}
+	})
+}
+
+// TestSlide_GridFillsTheSlide checks that a grid claiming the slide's height
+// with span ends on the slide's last row rather than past it, blank lines
+// around its tags included.
+func TestSlide_GridFillsTheSlide(t *testing.T) {
+	const width, height = 120, 40
+	grid := "[grid]\n[row span=1 border=rounded]\nonly row\n[/row]\n[/grid]"
+
+	for name, body := range map[string]string{
+		"bare":               grid,
+		"blank lines around": "\n" + grid + "\n\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			slide, err := NewSlide(body, config.Properties{})
+			if err != nil {
+				t.Fatalf("NewSlide() failed: %v", err)
+			}
+			slide.Style = config.StyleConfig{}.Apply(width, height)
+
+			lines := strings.Split(ansi.Strip(slide.View(false, width, height)), "\n")
+			if len(lines) != height {
+				t.Fatalf("slide is %d lines, want %d:\n%s", len(lines), height, strings.Join(lines, "\n"))
+			}
+			if !strings.Contains(lines[height-2], "╰") {
+				t.Errorf("grid ends above the slide's last row:\n%s", strings.Join(lines, "\n"))
+			}
+		})
+	}
+}
+
 // TestSlide_MasterLayout runs a slide through the templating layer the way the
 // presentation loader does.
 func TestSlide_MasterLayout(t *testing.T) {
