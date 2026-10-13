@@ -48,6 +48,7 @@ A terminal-based presentation tool that creates beautiful presentations from mar
   - Per-container `align`, `valign`, `gap`, `pad` and `border`
   - Nest grids to build tiling master/stack layouts
 - **Master layouts**: Define a reusable layout once under `masters:` and fill its `[slot]`s from each slide
+- **Font sizes**: Draw headings larger than the body text in terminals that support kitty's text sizing protocol
 - **Simple navigation**: Intuitive keyboard controls for presentation flow (vim style btw)
   - Command palette with slide search and filtering
   - Direct slide jumping by number
@@ -182,9 +183,38 @@ style:
   border_color: "#FF0000" # Hex color for border (or "default" for theme-based color)
   layout: center # Layout positioning: center, left, right, top, bottom
   theme: dracula # Theme name or path to custom JSON theme file
+  font_size: # Heading sizes from 1 to 7, see Font Sizes below
+    h1: 3
+    h2: 2
 ```
 
 Layout can also be specified as a combination: `layout: center,right`
+
+### Font Sizes
+
+`font_size` draws headings bigger than the body text, scaled by the number set
+for their level: `h1: 3` makes a top level heading three times as wide and three
+times as tall. Levels it leaves out keep their normal size, and so does `1`.
+Like the rest of `style`, it can be set globally, in a preset or on a single
+slide, and a slide's sizes are merged level by level with the ones it inherits.
+
+```yaml
+global:
+  style:
+    font_size:
+      h1: 3
+      h2: 2
+```
+
+This uses [kitty's text sizing protocol](https://sw.kovidgoyal.net/kitty/text-sizing-protocol/),
+which kitty 0.40 and later support. Kyma asks the terminal whether it supports
+the protocol at startup, and everywhere else, including inside tmux, headings
+simply keep their normal size. Set `KYMA_TEXT_SIZING=1` or `KYMA_TEXT_SIZING=0`
+to skip the check and force it on or off.
+
+Scaled headings move with the slide during transitions. Any letter a transition
+or overlay is cutting through is left blank until it is whole again. Only `#`
+style headings are scaled, not underlined ones.
 
 ### Grid Layouts
 

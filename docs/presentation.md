@@ -88,6 +88,7 @@ style:
 - `border_color` - Hex color for border (or "default" for theme-based color)
 - `layout` - center, left, right, top, bottom
 - `theme` - predefined theme name or path to custom JSON theme file
+- `font_size` - heading sizes such as `h1: 3`, in terminals that support kitty's text sizing
 
 ----
 ---

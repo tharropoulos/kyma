@@ -16,6 +16,7 @@ const (
 	NodeKindGridRow
 	NodeKindGridColumn
 	NodeKindError
+	NodeKindHeading
 )
 
 type Node interface {
@@ -156,6 +157,23 @@ func (n CodeBlockNode) String() string {
 		n.StartLine,
 		n.Code,
 	)
+}
+
+// HeadingNode is an ATX heading lifted out of the markdown so that it can be
+// drawn at a larger font size, see [HeadingParser].
+type HeadingNode struct {
+	BaseNode
+
+	Level int
+	Text  string
+}
+
+func (n HeadingNode) Kind() NodeKind {
+	return NodeKindHeading
+}
+
+func (n HeadingNode) String() string {
+	return fmt.Sprintf(`Heading(Level: %d, Text: "%s")`, n.Level, n.Text)
 }
 
 // GridNode stacks its rows vertically. After parsing its children are always

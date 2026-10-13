@@ -10,6 +10,7 @@ import (
 	"github.com/museslabs/kyma/docs"
 	"github.com/museslabs/kyma/internal/config"
 	"github.com/museslabs/kyma/internal/logger"
+	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui"
 )
 
@@ -28,6 +29,8 @@ var docsCmd = &cobra.Command{
 			slog.Error("Failed to load config", "error", err, "config_path", configPath)
 			return err
 		}
+
+		textsize.Detect()
 
 		data, err := docs.FS.ReadFile("presentation.md")
 		if err != nil {

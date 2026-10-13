@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	glamourStyles "github.com/charmbracelet/glamour/styles"
@@ -538,5 +539,120 @@ style:
 				)
 			}
 		})
+	}
+}
+
+func TestFontSize(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	testConfig := `global:
+  style:
+    font_size:
+      h1: 3
+      h2: 2
+
+presets:
+  test:
+    style:
+      font_size:
+        h3: 2
+`
+	testConfigPath := filepath.Join(tmpDir, "kyma.yaml")
+	if err := os.WriteFile(testConfigPath, []byte(testConfig), 0644); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	if err := Load(testConfigPath); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		properties string
+		want       FontSize
+		wantErr    bool
+	}{
+		{
+			name: "global font sizes apply to every slide",
+			want: FontSize{1: 3, 2: 2},
+		},
+		{
+			name: "slide font sizes merge level by level",
+			properties: `style:
+font_size:
+  h2: 4
+  h4: 2`,
+			want: FontSize{1: 3, 2: 4, 4: 2},
+		},
+		{
+			name: "a slide can put a level back to its normal size",
+			properties: `style:
+font_size:
+  h1: 1`,
+			want: FontSize{1: 1, 2: 2},
+		},
+		{
+			name:       "presets bring their own font sizes",
+			properties: `preset: test`,
+			want:       FontSize{3: 2},
+		},
+		{
+			name: "unknown heading",
+			properties: `style:
+font_size:
+  h7: 2`,
+			wantErr: true,
+		},
+		{
+			name: "scale too large",
+			properties: `style:
+font_size:
+  h1: 8`,
+			wantErr: true,
+		},
+		{
+			name: "scale too small",
+			properties: `style:
+font_size:
+  h1: 0`,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewProperties(tt.properties)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("NewProperties() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+
+			if !reflect.DeepEqual(got.Style.FontSize, tt.want) {
+				t.Errorf("FontSize = %v, want %v", got.Style.FontSize, tt.want)
+			}
+		})
+	}
+
+	// Merging a slide's sizes must not leak them into the global style that
+	// every other slide starts from.
+	if want := (FontSize{1: 3, 2: 2}); !reflect.DeepEqual(GlobalConfig.Global.Style.FontSize, want) {
+		t.Errorf("global FontSize = %v after merging slides, want %v", GlobalConfig.Global.Style.FontSize, want)
+	}
+}
+
+func TestFontSize_InvalidGlobal(t *testing.T) {
+	testConfigPath := filepath.Join(t.TempDir(), "kyma.yaml")
+	testConfig := `global:
+  style:
+    font_size:
+      title: 2
+`
+	if err := os.WriteFile(testConfigPath, []byte(testConfig), 0644); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	if err := Load(testConfigPath); err == nil {
+		t.Error("Load() succeeded with an invalid font_size heading")
 	}
 }

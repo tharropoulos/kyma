@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/museslabs/kyma/internal/config"
+	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui/transitions"
 )
 
@@ -336,7 +337,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// View draws the frame, with any scaled text in it drawn last, once nothing
+// else is going to cut the frame apart, see [textsize.Render].
 func (m model) View() string {
+	return textsize.Render(m.view(), m.width, m.height)
+}
+
+func (m model) view() string {
 	m.slide.Style = style(m.width, m.height, m.slide.Properties.Style)
 
 	hasOverlay := (m.command != nil && m.command.IsShowing()) ||
