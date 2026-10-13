@@ -159,6 +159,28 @@ presets:
 	}
 }
 
+// Running ./kyma from the directory it was built in must not read the binary
+// itself as the config file.
+func TestLoad_IgnoresBinaryNamedKyma(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Chdir(tmpDir)
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "kyma"), []byte{0xcf, 0xfa, 0xed, 0xfe, 0xff}, 0755); err != nil {
+		t.Fatalf("Failed to write fake binary: %v", err)
+	}
+
+	if err := Load(""); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	want := filepath.Join(tmpDir, ".config", "kyma", "kyma.yaml")
+	if got := viper.ConfigFileUsed(); got != want {
+		t.Errorf("ConfigFileUsed() = %q, want %q", got, want)
+	}
+}
+
 func TestCreateDefaultConfig(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "kyma-test-*")
 	if err != nil {

@@ -62,7 +62,6 @@ func transitionDecodeHook() mapstructure.DecodeHookFunc {
 }
 
 func Load(configPath string) error {
-	viper.SetConfigName(configName)
 	viper.SetConfigType(configType)
 
 	home, err := os.UserHomeDir()
@@ -70,22 +69,17 @@ func Load(configPath string) error {
 		return fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	if configPath != "" {
-		viper.SetConfigFile(configPath)
-	} else {
-		viper.AddConfigPath(".")
-
-		// Check XDG_CONFIG_HOME first, then fall back to ~/.config
-		xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		if xdgConfigHome != "" {
-			viper.AddConfigPath(filepath.Join(xdgConfigHome, "kyma"))
-		}
-		viper.AddConfigPath(filepath.Join(home, ".config", "kyma"))
-
+	if configPath == "" {
 		if err := createDefaultConfig(home); err != nil {
 			return fmt.Errorf("failed to create default config: %w", err)
 		}
+
+		configPath = findConfigFile(home)
+		if configPath == "" {
+			return fmt.Errorf("no %s.%s config file found", configName, configType)
+		}
 	}
+	viper.SetConfigFile(configPath)
 
 	if err := viper.ReadInConfig(); err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
@@ -108,6 +102,29 @@ func Load(configPath string) error {
 	}
 
 	return nil
+}
+
+// findConfigFile returns the first kyma.yaml or kyma.yml in the current
+// directory, $XDG_CONFIG_HOME/kyma or ~/.config/kyma. Viper's own search is
+// not used because, with a config type set, it also accepts a file named just
+// "kyma", which is the binary itself when run from the directory it was built
+// in.
+func findConfigFile(home string) string {
+	dirs := []string{"."}
+	if xdgConfigHome := os.Getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
+		dirs = append(dirs, filepath.Join(xdgConfigHome, "kyma"))
+	}
+	dirs = append(dirs, filepath.Join(home, ".config", "kyma"))
+
+	for _, dir := range dirs {
+		for _, ext := range []string{"yaml", "yml"} {
+			path := filepath.Join(dir, configName+"."+ext)
+			if info, err := os.Stat(path); err == nil && !info.IsDir() {
+				return path
+			}
+		}
+	}
+	return ""
 }
 
 func createDefaultConfig(home string) error {
