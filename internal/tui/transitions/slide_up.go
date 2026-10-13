@@ -2,6 +2,7 @@ package transitions
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -55,20 +56,15 @@ func (t slideUp) Update() (Transition, tea.Cmd) {
 	return t, Animate(time.Duration(t.fps))
 }
 
+// View pushes prev up by y lines and fills the space below with as much of
+// next as has come in, so the frame stays as tall as the slides.
 func (t slideUp) View(prev, next string) string {
-	var s strings.Builder
+	prevLines := strings.Split(prev, "\n")
+	nextLines := strings.Split(next, "\n")
 
-	y := int(math.Round(t.y))
+	y := min(int(math.Round(t.y)), len(prevLines), len(nextLines))
 
-	s.WriteString(prev)
-
-	lines := strings.Split(next, "\n")
-	if y > len(lines) {
-		y = len(lines)
-	}
-	s.WriteString("\n" + strings.Join(lines[:y], "\n"))
-
-	return s.String()
+	return strings.Join(slices.Concat(prevLines[y:], nextLines[:y]), "\n")
 }
 
 func (t slideUp) Name() string {
