@@ -3,7 +3,9 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/alecthomas/chroma/v2"
@@ -14,6 +16,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/goccy/go-yaml"
 
+	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui/transitions"
 )
 
@@ -48,7 +51,14 @@ type StyleConfig struct {
 	Border      *lipgloss.Border `yaml:"border"`
 	BorderColor string           `yaml:"border_color"`
 	Theme       *GlamourTheme    `yaml:"theme"`
+	FontSize    FontSize         `yaml:"font_size"`
 }
+
+// FontSize is the scale each heading level is drawn at, keyed by level, so 1
+// holds the scale of h1. Terminals that implement kitty's text sizing protocol
+// draw a heading at scale 2 twice as wide and twice as tall as the body text;
+// everywhere else headings keep their normal size.
+type FontSize map[int]int
 
 func (s *StyleConfig) Merge(style StyleConfig) {
 	if style.Layout != nil {
@@ -63,14 +73,24 @@ func (s *StyleConfig) Merge(style StyleConfig) {
 	if style.Theme != nil {
 		s.Theme = style.Theme
 	}
+	// Levels merge one by one, so a slide can resize h2 and keep the h1 size a
+	// preset set. The map is copied first because s is usually a copy of a
+	// global or preset style, which shares its map.
+	if len(style.FontSize) > 0 {
+		merged := make(FontSize, len(s.FontSize)+len(style.FontSize))
+		maps.Copy(merged, s.FontSize)
+		maps.Copy(merged, style.FontSize)
+		s.FontSize = merged
+	}
 }
 
 func (s *StyleConfig) DecodeMap(input map[string]any) error {
 	aux := struct {
-		Layout      string `mapstructure:"layout"`
-		Border      string `mapstructure:"border"`
-		BorderColor string `mapstructure:"border_color"`
-		Theme       string `mapstructure:"theme"`
+		Layout      string         `mapstructure:"layout"`
+		Border      string         `mapstructure:"border"`
+		BorderColor string         `mapstructure:"border_color"`
+		Theme       string         `mapstructure:"theme"`
+		FontSize    map[string]int `mapstructure:"font_size"`
 	}{}
 
 	if err := mapstructure.Decode(input, &aux); err != nil {
@@ -92,15 +112,20 @@ func (s *StyleConfig) DecodeMap(input map[string]any) error {
 	s.BorderColor = aux.BorderColor
 	s.Theme = getTheme(aux.Theme)
 
+	if s.FontSize, err = getFontSize(aux.FontSize); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
 	aux := struct {
-		Layout      string `yaml:"layout"`
-		Border      string `yaml:"border"`
-		BorderColor string `yaml:"border_color"`
-		Theme       string `yaml:"theme"`
+		Layout      string         `yaml:"layout"`
+		Border      string         `yaml:"border"`
+		BorderColor string         `yaml:"border_color"`
+		Theme       string         `yaml:"theme"`
+		FontSize    map[string]int `yaml:"font_size"`
 	}{}
 
 	var err error
@@ -123,6 +148,10 @@ func (s *StyleConfig) UnmarshalYAML(bytes []byte) error {
 
 	s.BorderColor = aux.BorderColor
 	s.Theme = getTheme(aux.Theme)
+
+	if s.FontSize, err = getFontSize(aux.FontSize); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -240,6 +269,28 @@ func getTheme(theme string) *GlamourTheme {
 	}
 
 	return &GlamourTheme{Style: *style, Name: theme}
+}
+
+// getFontSize parses font sizes keyed by heading name, such as h1: 3.
+func getFontSize(sizes map[string]int) (FontSize, error) {
+	if len(sizes) == 0 {
+		return nil, nil
+	}
+
+	fontSize := make(FontSize, len(sizes))
+	for heading, size := range sizes {
+		name := strings.ToLower(heading)
+		level, err := strconv.Atoi(strings.TrimPrefix(name, "h"))
+		if !strings.HasPrefix(name, "h") || err != nil || level < 1 || level > 6 {
+			return nil, fmt.Errorf("invalid font_size heading: %s, expected h1 to h6", heading)
+		}
+		if size < 1 || size > textsize.MaxScale {
+			return nil, fmt.Errorf("invalid font_size for %s: %d, expected 1 to %d", heading, size, textsize.MaxScale)
+		}
+		fontSize[level] = size
+	}
+
+	return fontSize, nil
 }
 
 func getLayoutPosition(p string) (lipgloss.Position, error) {

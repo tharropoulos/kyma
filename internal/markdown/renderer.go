@@ -32,6 +32,7 @@ type Renderer struct {
 type rendererOptions struct {
 	imgBackend img.ImageBackend
 	theme      string
+	fontSize   map[int]int
 }
 
 func NewRenderer(theme string, options ...RendererOption) (*Renderer, error) {
@@ -131,6 +132,11 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 		}
 		b.WriteString(out)
 
+	case NodeKindHeading:
+		if err := r.renderHeading(n.(*HeadingNode), animating, width, b); err != nil {
+			return err
+		}
+
 	case NodeKindError:
 		n := n.(*ErrorNode)
 		fmt.Fprintf(b, "%s\n", lipgloss.NewStyle().
@@ -229,6 +235,27 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 func WithImageBackend(backend string) RendererOption {
 	return func(r *Renderer) error {
 		r.options.imgBackend = img.Get(backend)
+		return nil
+	}
+}
+
+// WithFontSize draws headings at the scale set for their level, keyed by level.
+// It is only meant for terminals that implement kitty's text sizing protocol,
+// see [textsize.Supported]. Levels left at scale 1 stay with glamour.
+func WithFontSize(sizes map[int]int) RendererOption {
+	return func(r *Renderer) error {
+		var levels []int
+		for level, size := range sizes {
+			if size > 1 {
+				levels = append(levels, level)
+			}
+		}
+		if len(levels) == 0 {
+			return nil
+		}
+
+		r.options.fontSize = sizes
+		r.parser.Register(Prioritized[Parser](NewHeadingParser(levels...), 1))
 		return nil
 	}
 }

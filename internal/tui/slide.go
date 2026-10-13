@@ -8,6 +8,7 @@ import (
 
 	"github.com/museslabs/kyma/internal/config"
 	"github.com/museslabs/kyma/internal/markdown"
+	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui/transitions"
 )
 
@@ -33,10 +34,14 @@ func NewSlide(data string, props config.Properties) (*Slide, error) {
 		themeName = props.Style.Theme.Name
 	}
 
-	r, err := markdown.NewRenderer(themeName, markdown.WithImageBackend(props.ImageBackend))
+	opts := []markdown.RendererOption{markdown.WithImageBackend(props.ImageBackend)}
+	if textsize.Supported() {
+		opts = append(opts, markdown.WithFontSize(props.Style.FontSize))
+	}
+
+	r, err := markdown.NewRenderer(themeName, opts...)
 	if err != nil {
 		return nil, err
-
 	}
 
 	template, err := config.MasterLayout(props.Master)

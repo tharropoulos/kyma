@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/museslabs/kyma/internal/config"
+	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui/transitions"
 )
 
@@ -376,10 +377,12 @@ func (m model) View() string {
 	}
 
 	if m.timerDisplay.IsVisible() {
-		return m.timerDisplay.Show(slideView, m.width, m.height, m.globalTimer, m.slide.Timer)
+		// The timer is drawn over the slide by cutting its lines apart, which
+		// scaled text does not survive, so headings keep their normal size.
+		return m.timerDisplay.Show(textsize.Strip(slideView), m.width, m.height, m.globalTimer, m.slide.Timer)
 	}
 
-	return slideView
+	return textsize.Render(slideView)
 }
 
 // GetSyncServer returns the sync server instance

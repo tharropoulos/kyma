@@ -14,6 +14,7 @@ import (
 
 	"github.com/museslabs/kyma/internal/config"
 	"github.com/museslabs/kyma/internal/logger"
+	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui"
 	"github.com/museslabs/kyma/internal/tui/transitions"
 )
@@ -68,6 +69,14 @@ var rootCmd = &cobra.Command{
 		if err := config.Load(configPath); err != nil {
 			slog.Error("Failed to load config", "error", err, "config_path", configPath)
 			return err
+		}
+
+		// Ask the terminal before parsing, since slides decide how to draw
+		// their headings when they are created, and before the TUI starts
+		// reading stdin, which is where the answer arrives.
+		if !notes {
+			textsize.Detect()
+			slog.Info("Detected text sizing support", "supported", textsize.Supported())
 		}
 
 		filename := args[0]
