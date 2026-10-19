@@ -419,6 +419,20 @@ func ChromaStyle(style ansi.StylePrimitive) string {
 	return s
 }
 
+// CodeBlockColor returns the color a theme sets on code blocks, or "" when it
+// sets none.
+func CodeBlockColor(themeName string) string {
+	styleConfig := GlamourTheme{Style: glamourStyles.DarkStyleConfig, Name: "dark"}
+	if theme := getTheme(themeName); theme != nil {
+		styleConfig = *theme
+	}
+
+	if color := styleConfig.Style.CodeBlock.Color; color != nil {
+		return *color
+	}
+	return ""
+}
+
 func GetChromaStyle(themeName string) *chroma.Style {
 	customThemeName := chromaStyleTheme + "-" + themeName
 

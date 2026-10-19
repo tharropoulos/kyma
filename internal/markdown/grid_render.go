@@ -299,11 +299,19 @@ func fitBlock(s string, width, height int, halign, valign Align, truncate bool) 
 		}
 
 		w := ansi.StringWidth(line)
-		if w > width {
-			if !truncate {
+		if excess := w - width; excess > 0 {
+			switch {
+			case truncate:
+				line = ansi.Truncate(line, width, "")
+			case len(line)-len(strings.TrimRight(line, " ")) >= excess:
+				// Graphics cannot be cut, but the padding an earlier fit
+				// squared the line off with can, and that is all an indent
+				// pushes past the edge.
+				line = line[:len(line)-excess]
+			default:
 				continue
 			}
-			line, w = ansi.Truncate(line, width, ""), width
+			w = width
 		}
 
 		lines[i] = line + strings.Repeat(" ", width-w)

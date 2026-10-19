@@ -13,28 +13,30 @@ type chafaCache struct {
 	cache map[string]string
 }
 
-func (c *chafaCache) key(path string, width, height int, symbols bool) string {
+func (c *chafaCache) key(path string, width, height int, cell cellSize, symbols bool) string {
 	return strings.Join(
 		[]string{
 			path,
 			strconv.Itoa(int(width)),
 			strconv.Itoa(int(height)),
+			strconv.Itoa(int(cell.width)),
+			strconv.Itoa(int(cell.height)),
 			strconv.FormatBool(symbols),
 		},
 		"|",
 	)
 }
 
-func (c *chafaCache) Get(path string, width, height int, symbols bool) string {
-	img, ok := c.cache[c.key(path, width, height, symbols)]
+func (c *chafaCache) Get(path string, width, height int, cell cellSize, symbols bool) string {
+	img, ok := c.cache[c.key(path, width, height, cell, symbols)]
 	if !ok {
 		return ""
 	}
 	return img
 }
 
-func (c *chafaCache) Save(img, path string, width, height int, symbols bool) {
-	c.cache[c.key(path, width, height, symbols)] = img
+func (c *chafaCache) Save(img, path string, width, height int, cell cellSize, symbols bool) {
+	c.cache[c.key(path, width, height, cell, symbols)] = img
 }
 
 type chafaBackend struct {
@@ -68,24 +70,28 @@ func (b *chafaBackend) Render(path string, width, height int, symbols bool) (str
 		}
 	}()
 
-	c := b.cache.Get(path, width, height, symbols)
+	cell := terminalCellSize()
+
+	c := b.cache.Get(path, width, height, cell, symbols)
 	if c != "" {
 		return c, nil
 	}
 
-	out, err := b.render(path, int32(width), int32(height), symbols)
-	b.cache.Save(out, path, width, height, symbols)
+	out, err := b.render(path, int32(width), int32(height), cell, symbols)
+	b.cache.Save(out, path, width, height, cell, symbols)
 
 	return out, err
 }
 
-func (b chafaBackend) render(path string, width, height int32, symbols bool) (string, error) {
+func (b chafaBackend) render(path string, width, height int32, cell cellSize, symbols bool) (string, error) {
 	pixels, pixelWidth, pixelHeight, err := chafa.Load(path)
 	if err != nil {
 		return "", err
 	}
 
-	chafa.CalcCanvasGeometry(width, height, &width, &height, 1, true, false)
+	// Shrink the box the slide gave the image to the largest size that keeps
+	// the image's proportions, since the canvas stretches it to fill the box.
+	chafa.CalcCanvasGeometry(pixelWidth, pixelHeight, &width, &height, cell.ratio(), true, false)
 
 	capabilities := b.detectTerminal()
 	defer chafa.SymbolMapUnref(capabilities.symbolMap)
@@ -98,7 +104,7 @@ func (b chafaBackend) render(path string, width, height int32, symbols bool) (st
 	chafa.CanvasConfigSetGeometry(config, width, height)
 	chafa.CanvasConfigSetPassthrough(config, capabilities.passthrough)
 	chafa.CanvasConfigSetSymbolMap(config, capabilities.symbolMap)
-	chafa.CanvasConfigSetCellGeometry(config, 18, 36)
+	chafa.CanvasConfigSetCellGeometry(config, cell.width, cell.height)
 
 	if symbols {
 		chafa.CanvasConfigSetPixelMode(config, chafa.CHAFA_PIXEL_MODE_SYMBOLS)

@@ -256,3 +256,20 @@ func TestRenderer_GridValign(t *testing.T) {
 		})
 	}
 }
+
+// TestFitBlock_CentresGraphics covers blocks that hold terminal graphics, which
+// fitBlock never cuts. Their lines arrive already padded to the column's width,
+// so centring has to give up that padding rather than leave the block where it
+// was.
+func TestFitBlock_CentresGraphics(t *testing.T) {
+	padded := fitBlock("████\n████", 20, 0, AlignDefault, AlignDefault, false)
+
+	got := fitBlock(padded, 20, 0, AlignCenter, AlignDefault, false)
+
+	want := strings.Repeat(" ", 8) + "████" + strings.Repeat(" ", 8)
+	for i, line := range strings.Split(got, "\n") {
+		if line != want {
+			t.Errorf("line %d is %q, want %q", i, line, want)
+		}
+	}
+}

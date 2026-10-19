@@ -34,6 +34,9 @@ type Renderer struct {
 	wrapped map[int]*glamour.TermRenderer
 	parser  *MarkdownParser
 	options rendererOptions
+	// dimmed draws the lines a code block leaves out of its highlighted range,
+	// in the color the theme sets on code blocks.
+	dimmed lipgloss.Style
 }
 
 type rendererOptions struct {
@@ -55,6 +58,13 @@ func NewRenderer(theme string, options ...RendererOption) (*Renderer, error) {
 	p.Register(Prioritized[Parser](NewGridRowParser(), 2))
 	p.Register(Prioritized[Parser](NewGridColumnParser(), 3))
 
+	// Looked up once, since a custom theme is read from disk and a slide is
+	// re-rendered on every animation frame.
+	dimmed := lipgloss.NewStyle()
+	if color := config.CodeBlockColor(theme); color != "" {
+		dimmed = dimmed.Foreground(lipgloss.Color(color))
+	}
+
 	r := &Renderer{
 		tr:      tr,
 		wrapped: map[int]*glamour.TermRenderer{},
@@ -63,6 +73,7 @@ func NewRenderer(theme string, options ...RendererOption) (*Renderer, error) {
 			imgBackend: img.Get("chafa"),
 			theme:      theme,
 		},
+		dimmed: dimmed,
 	}
 	for _, o := range options {
 		if err := o(r); err != nil {
@@ -420,7 +431,7 @@ func (r *Renderer) renderHighlightedCode(
 			}
 			result.WriteString(formattedLine)
 		} else {
-			result.WriteString(line)
+			result.WriteString(r.dimmed.Render(line))
 		}
 
 		if i < len(lines)-1 {

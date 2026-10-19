@@ -2,9 +2,14 @@ package markdown
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/muesli/termenv"
 )
 
 func TestRenderer_BasicRender(t *testing.T) {
@@ -66,6 +71,38 @@ func main() {
 	}
 
 	golden.RequireEqual(t, got)
+}
+
+// TestRenderer_DimsLinesOutsideTheHighlight checks that a line a code block
+// leaves out of its highlighted range is drawn in the theme's code block color,
+// and a highlighted line is not.
+func TestRenderer_DimsLinesOutsideTheHighlight(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	theme := filepath.Join(t.TempDir(), "theme.json")
+	if err := os.WriteFile(theme, []byte(`{"code_block": {"color": "#808080"}}`), 0o644); err != nil {
+		t.Fatalf("could not write theme: %v", err)
+	}
+
+	r, err := NewRenderer(theme)
+	if err != nil {
+		t.Fatalf("could not construct receiver type: %v", err)
+	}
+
+	got, err := r.Render("```go{2}\ndimmed()\nhighlighted()\n```", false, 0, 0)
+	if err != nil {
+		t.Fatalf("Render() failed: %v", err)
+	}
+
+	gray := "\x1b[38;2;128;128;128m"
+	if !strings.Contains(got, gray+"dimmed()") {
+		t.Errorf("line outside the range is not gray:\n%q", got)
+	}
+	if strings.Contains(got, gray+"highlighted()") {
+		t.Errorf("highlighted line is gray:\n%q", got)
+	}
 }
 
 func TestRenderer_RenderCodeBlockWithLineNumbers(t *testing.T) {
