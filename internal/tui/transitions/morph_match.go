@@ -100,19 +100,33 @@ func (s *scene) words(p piece) []piece {
 func newPiece(x, y int, glyphs []glyph) piece {
 	// Each glyph goes into the key as its style's number and its text, and
 	// into the shape as its text, each ended by a zero byte that no text has,
-	// so two pieces only share a key or a shape glyph for glyph.
+	// so two pieces only share a key or a shape glyph for glyph. The markers
+	// in front of scaled text go into both, since its placeholder cells all
+	// look the same and only the markers tell which text they stand for.
 	var key, shape []byte
 	for _, g := range glyphs {
 		key = append(key, byte(g.style), byte(g.style>>8), byte(g.style>>16), byte(g.style>>24))
+		key = append(key, g.pre...)
 		key = append(key, g.text...)
 		key = append(key, 0)
 		if g.text == "" {
 			shape = append(shape, ' ')
 		}
+		shape = append(shape, g.pre...)
 		shape = append(shape, g.text...)
 		shape = append(shape, 0)
 	}
 	return piece{x: x, y: y, glyphs: glyphs, key: string(key), shape: string(shape)}
+}
+
+// scaled reports whether the piece holds scaled text, see glyph.pre.
+func (p piece) scaled() bool {
+	for _, g := range p.glyphs {
+		if g.pre != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (p piece) width() int {
@@ -341,6 +355,27 @@ func matchFrames(a, b []frame, moves []move) []boxMove {
 		if !pairedB[j] {
 			out = append(out, boxMove{to: &b[j]})
 		}
+	}
+
+	// Outer boxes are drawn first, so the ones inside them go on top.
+	slices.SortStableFunc(out, func(p, q boxMove) int {
+		return cmp.Compare(q.area(), p.area())
+	})
+	return out
+}
+
+// stayPut splits up the boxes that would move or resize, so each fades out or
+// in where it is. Only a box in the same place on both slides stays paired,
+// changing color at most.
+func stayPut(boxes []boxMove) []boxMove {
+	var out []boxMove
+	for _, b := range boxes {
+		if b.from != nil && b.to != nil &&
+			[4]int{b.from.x0, b.from.y0, b.from.x1, b.from.y1} != [4]int{b.to.x0, b.to.y0, b.to.x1, b.to.y1} {
+			out = append(out, boxMove{from: b.from}, boxMove{to: b.to})
+			continue
+		}
+		out = append(out, b)
 	}
 
 	// Outer boxes are drawn first, so the ones inside them go on top.

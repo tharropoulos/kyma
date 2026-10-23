@@ -55,6 +55,24 @@ func TestCodeblockParser_Parse(t *testing.T) {
 				StartLine:       15,
 			},
 		},
+		{
+			name: "Backticks inside the code",
+			in: []byte(
+				"``ts{1}\ntype Id<S> = S extends `gid://${infer Id}` ? Id : never\nconst fence = ```\n```",
+			),
+			want: &CodeBlockNode{
+				Language: "ts",
+				Code:     "type Id<S> = S extends `gid://${infer Id}` ? Id : never\nconst fence = ```",
+				Ranges: []CodeBlockLineRange{
+					{
+						Start: 1,
+						End:   1,
+					},
+				},
+				ShowLineNumbers: false,
+				StartLine:       1,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -117,6 +135,12 @@ func TestCodeBlockParser_parseLines(t *testing.T) {
 				{Start: 3, End: 5},
 				{Start: 7, End: 7},
 			},
+			wantErr: false,
+		},
+		{
+			name:    "numbers with a zero",
+			in:      []byte("{6-10,20}"),
+			want:    []CodeBlockLineRange{{Start: 6, End: 10}, {Start: 20, End: 20}},
 			wantErr: false,
 		},
 		{

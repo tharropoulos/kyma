@@ -230,7 +230,9 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 			b.WriteString(ansi.SaveCursor)
 			b.WriteString(himg)
 			b.WriteString(ansi.RestoreCursor)
-			b.WriteString(limg)
+			// Under the image the text only holds its place: drawing the
+			// symbols there too shows them through every transparent pixel.
+			b.WriteString(blank(limg))
 		} else {
 			b.WriteString(limg)
 		}
@@ -301,6 +303,17 @@ func onlyGrids(nodes []Node) bool {
 		}
 	}
 	return true
+}
+
+// blank returns s with every line turned into blank cells as wide as it was
+// drawn. The cells are no-break spaces, which show nothing but, unlike spaces,
+// still count as ink when a column lines its content up.
+func blank(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.Repeat("\u00a0", ansi.StringWidth(line))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func WithImageBackend(backend string) RendererOption {

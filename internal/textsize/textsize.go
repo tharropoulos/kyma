@@ -294,6 +294,15 @@ func scan(line string) []placement {
 	return found
 }
 
+// IsMarker reports whether seq is one of the zero width markers [Block] opens
+// the rows of its placeholders with. Code that takes a frame apart cell by
+// cell has to put them back in front of the cell they came before, or [Render]
+// won't find the text they stand for.
+func IsMarker(seq string) bool {
+	_, _, ok := parseMarker(seq)
+	return ok
+}
+
 func parseMarker(seq string) (id, row int, ok bool) {
 	body, found := strings.CutPrefix(seq, markerPrefix)
 	if !found {

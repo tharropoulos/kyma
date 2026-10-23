@@ -31,7 +31,7 @@ type styles struct {
 	fixed   int
 
 	looks  []look
-	fades  [2]fadeMemo
+	faints []int32
 	blends map[blend]int32
 	// fg and bg are the terminal's colors for the frame being drawn.
 	fg, bg rgb
@@ -51,18 +51,11 @@ type rgb struct {
 }
 
 // A look is a style worked out for a frame: the attributes of one of the
-// slides' styles, base, in colors of its own.
+// slides' styles, base, in colors of its own, and faint when it is fading.
 type look struct {
 	base   int32
 	colors [3]rgb
-}
-
-// A fadeMemo holds the faded look of each of the slides' styles at one
-// strength, or 0 where there isn't one yet. A frame fades at two strengths at
-// most, one for what leaves and one for what enters.
-type fadeMemo struct {
-	alpha float64
-	ids   []int32
+	faint  bool
 }
 
 // A blend is a look t of the way from style a to style b.
@@ -136,19 +129,14 @@ func (s *styles) apply(from int32, seq string, p *ansi.Parser) int32 {
 // fix marks the styles numbered so far as the slides' own.
 func (s *styles) fix() {
 	s.fixed = len(s.all)
-	for i := range s.fades {
-		s.fades[i] = fadeMemo{alpha: -1, ids: make([]int32, s.fixed)}
-	}
+	s.faints = make([]int32, s.fixed)
 }
 
 // reset drops the looks worked out for the last frame.
 func (s *styles) reset() {
 	s.looks = s.looks[:0]
 	clear(s.blends)
-	for i := range s.fades {
-		s.fades[i].alpha = -1
-		clear(s.fades[i].ids)
-	}
+	clear(s.faints)
 	s.fg, s.bg = toRGB(terminalFg), toRGB(terminalBg)
 }
 
@@ -165,49 +153,22 @@ func (s *styles) add(l look) int32 {
 	return int32(s.fixed + len(s.looks) - 1)
 }
 
-// faded returns style id at strength alpha: its colors mixed with the
-// terminal's background, which it can't be told apart from at nothing. The mix
-// is plain RGB, which is what showing something partly see-through over the
-// background is.
-func (s *styles) faded(id int32, alpha float64) int32 {
-	if alpha >= 1 {
+// faint returns style id with the faint attribute, which is how what fades
+// is drawn. A terminal has no way to draw text partly see-through in a color,
+// and mixing its colors into the background color the terminal reports only
+// looks right where that color is what shows: over a translucent terminal,
+// with a picture behind it, fading text turns dark instead. Faint text keeps
+// its colors, and terminals like kitty and Ghostty draw it at a lower opacity
+// over whatever is behind.
+func (s *styles) faint(id int32) int32 {
+	if int(id) >= s.fixed {
 		return id
 	}
-
-	memo := s.fadeMemo(alpha)
-	if v := memo[id]; v != 0 {
+	if v := s.faints[id]; v != 0 {
 		return v
 	}
-
-	c := s.colors[id]
-	l := look{base: id}
-	l.colors[fgColor] = mix(s.bg, or(c[fgColor], s.fg), alpha)
-	for _, i := range []int{bgColor, ulColor} {
-		if c[i].set {
-			l.colors[i] = mix(s.bg, c[i], alpha)
-		}
-	}
-
-	memo[id] = s.add(l)
-	return memo[id]
-}
-
-func (s *styles) fadeMemo(alpha float64) []int32 {
-	for i := range s.fades {
-		if s.fades[i].alpha == alpha {
-			return s.fades[i].ids
-		}
-	}
-	for i := range s.fades {
-		if s.fades[i].alpha < 0 {
-			s.fades[i].alpha = alpha
-			return s.fades[i].ids
-		}
-	}
-	// A third strength in one frame: start the first over.
-	s.fades[0].alpha = alpha
-	clear(s.fades[0].ids)
-	return s.fades[0].ids
+	s.faints[id] = s.add(look{base: id, colors: s.colors[id], faint: true})
+	return s.faints[id]
 }
 
 // blended returns the look t of the way from style a to style b. Colors blend
@@ -260,6 +221,9 @@ func (s *styles) appendSGR(out []byte, id int32) []byte {
 		out = append(out, ';')
 		out = append(out, p...)
 	}
+	if l.faint {
+		out = append(out, ";2"...)
+	}
 	for i, c := range l.colors {
 		if c.set {
 			out = append(out, sgrColors[i]...)
@@ -287,14 +251,6 @@ func or(c, def rgb) rgb {
 		return c
 	}
 	return def
-}
-
-// mix is alpha of the way from a to b.
-func mix(a, b rgb, alpha float64) rgb {
-	m := func(x, y uint8) uint8 {
-		return uint8(float64(x) + (float64(y)-float64(x))*alpha + 0.5)
-	}
-	return rgb{m(a.r, b.r), m(a.g, b.g), m(a.b, b.b), true}
 }
 
 func blendOkLab(a, b rgb, t float64) rgb {

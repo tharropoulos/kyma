@@ -62,6 +62,8 @@ func Get(name string, fps int) Transition {
 		return newFade(fps)
 	case "morph":
 		return newMorph(fps)
+	case "crossfade":
+		return newCrossfade(fps)
 	default:
 		return newNoTransition(fps)
 	}

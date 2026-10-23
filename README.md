@@ -172,6 +172,8 @@ This slide uses a custom JSON theme file
 - `collapse` - Collapse transition effect
 - `expand` - Expand transition effect
 - `fade` - Fade transition effect
+- `morph` - Carries what both slides share to its new place, like Keynote's Magic Move
+- `crossfade` - Keeps what both slides share where it is, blends text that only changed color, and fades the rest out and in
 
 ### Style Configuration
 

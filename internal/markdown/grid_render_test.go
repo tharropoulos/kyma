@@ -273,3 +273,51 @@ func TestFitBlock_CentresGraphics(t *testing.T) {
 		}
 	}
 }
+
+// fakeImages draws every image as a block of symbols, or as one graphics escape
+// that takes up no cells, the way a terminal with graphics gets it.
+type fakeImages struct{}
+
+func (fakeImages) SymbolsOnly() bool { return false }
+
+func (fakeImages) Render(_ string, _, _ int, symbols bool) (string, error) {
+	if symbols {
+		return "▀▀▀▀▀▀▀▀▀▀\n▀▀▀▀▀▀▀▀▀▀\n▀▀▀▀▀▀▀▀▀▀", nil
+	}
+	return "\x1b_Gimage\x1b\\", nil
+}
+
+// TestRenderer_StillImageSitsWhereItMoves: a slide drawn still puts its images
+// in the same column as the frames of a transition do, so landing on it does
+// not shift them, even though nothing visible is left under the graphics.
+func TestRenderer_StillImageSitsWhereItMoves(t *testing.T) {
+	in := "[row]\n[col align=center]\n![logo|10x3](logo.png)\n[/col]\n[/row]"
+
+	r, err := NewRenderer("dark")
+	if err != nil {
+		t.Fatalf("could not construct renderer: %v", err)
+	}
+	r.options.imgBackend = fakeImages{}
+
+	column := func(animating bool, cell string) int {
+		out, err := r.Render(in, animating, 40, 0)
+		if err != nil {
+			t.Fatalf("Render() failed: %v", err)
+		}
+		for _, line := range strings.Split(out, "\n") {
+			if i := strings.Index(line, cell); i >= 0 {
+				return ansi.StringWidth(line[:i])
+			}
+		}
+		t.Fatalf("no %q in:\n%s", cell, out)
+		return 0
+	}
+
+	moving := column(true, "▀")
+	if still := column(false, "\x1b_Gimage"); still != moving {
+		t.Errorf("still image starts at column %d, moving at %d", still, moving)
+	}
+	if moving == 0 {
+		t.Errorf("centred image starts at column 0")
+	}
+}

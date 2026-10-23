@@ -76,24 +76,27 @@ func (p *CodeBlockParser) Parse(r *bytes.Reader, _ *MarkdownParser) Node {
 		return nil
 	}
 
-	var code bytes.Buffer
-	for {
+	// The code ends at a fence at the start of a line, the rule [scanFence]
+	// follows too, so backticks inside it, like a template literal, are kept.
+	var (
+		code     bytes.Buffer
+		ticks    int
+		lineHead = true
+	)
+	for ticks < 3 {
 		b, err := r.ReadByte()
 		if err != nil {
 			slog.Warn("failed to advance reader", slog.Any("error", err))
 			return nil
 		}
-		if b == '`' {
-			break
+		if b == '`' && (lineHead || ticks > 0) {
+			ticks++
+			continue
 		}
+		// Backticks that did not make a fence belong to the code.
+		code.WriteString(strings.Repeat("`", ticks))
 		code.WriteByte(b)
-	}
-
-	for range 2 {
-		if b, err := r.ReadByte(); err != nil || b != '`' {
-			slog.Warn("failed to parse codeblock node")
-			return nil
-		}
+		lineHead, ticks = b == '\n', 0
 	}
 
 	return &CodeBlockNode{
@@ -182,7 +185,7 @@ func (p *CodeBlockParser) parseLineRange(
 		lineRange.Start = n
 		return p.parseLineRange(r, num, lineRange)
 
-	case b >= '1' && b <= '9':
+	case b >= '0' && b <= '9':
 		num.WriteByte(b)
 		return p.parseLineRange(r, num, lineRange)
 

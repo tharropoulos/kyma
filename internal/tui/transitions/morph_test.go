@@ -10,6 +10,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
+
+	"github.com/museslabs/kyma/internal/textsize"
 )
 
 // slide pads every line to the same width, the way a rendered slide comes.
@@ -148,6 +150,155 @@ func TestMorph_StartsOnPrevAndEndsOnNext(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// headingSlide lays a scaled heading out the way a slide does, below top blank
+// lines and above the rest.
+func headingSlide(width, top int, heading string, lines ...string) string {
+	rows := make([]string, top)
+	rows = append(rows, textsize.Block(heading, 2)...)
+	return slide(width, append(rows, lines...)...)
+}
+
+// A scaled heading is only placeholder cells until textsize.Render draws it
+// from the markers in front of them, so the morph has to carry those along.
+// Without them every heading goes blank for the whole morph and flashes back
+// at its end. Each frame draws one heading whole, and one swapped for another
+// changes over in one go.
+func TestMorph_KeepsScaledHeadings(t *testing.T) {
+	const width = 30
+
+	for name, tc := range map[string]struct {
+		prev, next string
+		from, to   string
+	}{
+		"in place": {
+			prev: headingSlide(width, 0, "Hi", "", "\x1b[38;5;240mone\x1b[0m", "\x1b[38;5;228mtwo\x1b[0m"),
+			next: headingSlide(width, 0, "Hi", "", "\x1b[38;5;228mone\x1b[0m", "\x1b[38;5;240mtwo\x1b[0m"),
+			from: "Hi", to: "Hi",
+		},
+		"moving": {
+			prev: headingSlide(width, 0, "Hi", "", "", "", "", ""),
+			next: headingSlide(width, 3, "Hi", "", ""),
+			from: "Hi", to: "Hi",
+		},
+		"swapped": {
+			prev: headingSlide(width, 0, "Hi", "", "text"),
+			next: headingSlide(width, 0, "Yo", "", "text"),
+			from: "Hi", to: "Yo",
+		},
+	} {
+		for kind, s := range map[string]scene{
+			"morph":     newScene(tc.prev, tc.next),
+			"crossfade": newStillScene(tc.prev, tc.next),
+		} {
+			t.Run(name+"/"+kind, func(t *testing.T) {
+				keepsScaledHeading(t, s, width, tc.from, tc.to)
+			})
+		}
+	}
+}
+
+func keepsScaledHeading(t *testing.T, s scene, width int, from, to string) {
+	t.Helper()
+
+	for step := range 21 {
+		p := float64(step) / 20
+		frame := s.frame(p)
+		drawn := textsize.Render(frame, width, strings.Count(frame, "\n")+1)
+
+		var got string
+		for _, part := range strings.Split(drawn, "\x1b]66;s=2;")[1:] {
+			got += part[:strings.Index(part, "\a")]
+		}
+		switch {
+		case step == 0 && got != from:
+			t.Errorf("the first frame draws %q, want %q", got, from)
+		case step == 20 && got != to:
+			t.Errorf("the last frame draws %q, want %q", got, to)
+		case got != from && got != to:
+			t.Errorf("at %.2f the frame draws %q, want %q or %q", p, got, from, to)
+		}
+	}
+}
+
+// In a crossfade nothing moves: every frame only shows something where the
+// slide being left or the one arriving does.
+func TestCrossfade_NothingMoves(t *testing.T) {
+	for name, tc := range morphCases {
+		t.Run(name, func(t *testing.T) {
+			s := newStillScene(tc.prev, tc.next)
+			prev, next := cells(tc.prev, tc.width, tc.height), cells(tc.next, tc.width, tc.height)
+
+			for step := range 21 {
+				p := float64(step) / 20
+				frame := cells(s.frame(p), tc.width, tc.height)
+				for at := range frame {
+					if !prev[at] && !next[at] {
+						t.Errorf("at %.2f the frame shows something at %v, where neither slide does", p, at)
+					}
+				}
+			}
+		})
+	}
+}
+
+// cells is where a frame shows something.
+func cells(frame string, width, height int) map[[2]int]bool {
+	buf := cellbuf.NewBuffer(width, height)
+	cellbuf.SetContent(buf, frame)
+
+	out := map[[2]int]bool{}
+	for y := range height {
+		for x := range width {
+			if c := buf.Cell(x, y); c != nil && c.Width > 0 && shows(c) {
+				out[[2]int{x, y}] = true
+			}
+		}
+	}
+	return out
+}
+
+// What is the same on both slides stays as it is through a crossfade, and
+// text that only changed color is drawn in every frame while its color turns,
+// the way a highlight moves between lines of the same code.
+func TestCrossfade_KeepsWhatStays(t *testing.T) {
+	const width, height = 20, 3
+	prev := slide(width, "same line", "\x1b[38;5;240mcode\x1b[0m", "old")
+	next := slide(width, "same line", "\x1b[38;5;228mcode\x1b[0m", "new")
+	s := newStillScene(prev, next)
+
+	for step := range 21 {
+		p := float64(step) / 20
+		got := looks(s.frame(p), width, height)
+		if want := looks(prev, width, height)[0]; got[0] != want {
+			t.Errorf("at %.2f the line both slides have is %q, want %q", p, got[0], want)
+		}
+		if plain := ansi.Strip(got[1]); !strings.HasPrefix(plain, "code") {
+			t.Errorf("at %.2f the recolored line is %q, want it whole", p, plain)
+		}
+	}
+}
+
+func TestGet_Crossfade(t *testing.T) {
+	tr := Get("crossfade", Fps)
+	if got := tr.Name(); got != "crossfade" {
+		t.Errorf("Get(\"crossfade\").Name() = %q", got)
+	}
+	if got := tr.Opposite().Name(); got != "crossfade" {
+		t.Errorf("the opposite of a crossfade is a %q", got)
+	}
+
+	clock := time.Unix(0, 0)
+	now = func() time.Time { return clock }
+	t.Cleanup(func() { now = time.Now })
+
+	tr = tr.Start(10, 2, Forwards)
+	tr, _ = tr.Update()
+	clock = clock.Add(crossfadeDuration)
+	if tr, _ = tr.Update(); tr.Animating() {
+		t.Errorf("a crossfade is still going after %v", crossfadeDuration)
 	}
 }
 
@@ -362,15 +513,6 @@ func find(frame string, width, height int, r rune) []at {
 	return out
 }
 
-func lightness(c ansi.Color) float64 {
-	v, ok := makeColor(c)
-	if !ok {
-		return -1
-	}
-	l, _, _ := v.OkLab()
-	return l
-}
-
 // What only one slide has fades into the background and out of it, rather
 // than popping in or out.
 func TestMorph_Fades(t *testing.T) {
@@ -389,28 +531,33 @@ func TestMorph_Fades(t *testing.T) {
 			t.Fatalf("frame %d has %d a's and %d b's, want every cell of a word or none", n, len(a), len(b))
 		}
 
-		la, lb := -1.0, -1.0
-		if len(a) > 0 {
-			la = lightness(a[0].Style.Fg)
-		}
-		if len(b) > 0 {
-			lb = lightness(b[0].Style.Fg)
-		}
+		la, lb := strength(a), strength(b)
 		if la > lastA || lb < lastB {
-			t.Fatalf("frame %d: a is at %.2f after %.2f and b at %.2f after %.2f, want a to dim and b to brighten",
+			t.Fatalf("frame %d: a is at %.0f after %.0f and b at %.0f after %.0f, want a to dim and b to brighten",
 				n, la, lastA, lb, lastB)
 		}
 		lastA, lastB = la, lb
 
-		between = between || (la > 0 && la < 0.99) || (lb > 0 && lb < 0.99)
+		between = between || la == 1 || lb == 1
 	}
 
-	if lastA != -1 || lastB < 0.99 {
-		t.Errorf("the morph ends with a at %.2f and b at %.2f, want a gone and b at full", lastA, lastB)
+	if lastA != 0 || lastB != 2 {
+		t.Errorf("the morph ends with a at %.0f and b at %.0f, want a gone and b at full", lastA, lastB)
 	}
 	if !between {
 		t.Error("the words pop in and out, want them to fade")
 	}
+}
+
+// strength is how strongly a word is drawn: 2 in full, 1 faint, 0 not at all.
+func strength(cells []at) float64 {
+	switch {
+	case len(cells) == 0:
+		return 0
+	case cells[0].Style.Attrs&cellbuf.FaintAttr != 0:
+		return 1
+	}
+	return 2
 }
 
 // Where one piece fades out and another fades into the same cell, the cell
@@ -587,18 +734,29 @@ func TestMorph_RecoloredTextMoves(t *testing.T) {
 }
 
 // Fades go to the terminal's own background, whatever it is.
-func TestMorph_FadesToTheTerminalBackground(t *testing.T) {
+// What fades keeps its own colors and is drawn faint, rather than mixed into
+// the background color the terminal reports, which over a translucent terminal
+// with a picture behind it would show as text turning dark.
+func TestMorph_FadesKeepTheirColors(t *testing.T) {
 	fg, bg := terminalFg, terminalBg
 	t.Cleanup(func() { terminalFg, terminalBg = fg, bg })
 	SetTerminalColors(nil, color.White)
 
-	s := newScene(slide(4, "\x1b[38;2;0;0;0mgone\x1b[0m"), slide(4, ""))
-	cells := find(s.frame(0.3), 4, 1, 'g')
-	if len(cells) != 1 {
-		t.Fatalf("the word is gone already")
-	}
-	if l := lightness(cells[0].Style.Fg); l <= 0.05 {
-		t.Errorf("black text fading on white is at lightness %.2f, want it lighter", l)
+	for _, kind := range []struct {
+		name string
+		make func(prev, next string) scene
+	}{{"morph", newScene}, {"crossfade", newStillScene}} {
+		s := kind.make(slide(4, "\x1b[38;2;200;150;0mgone\x1b[0m"), slide(4, ""))
+		cells := find(s.frame(0.4), 4, 1, 'g')
+		if len(cells) != 1 {
+			t.Fatalf("%s: the word is gone already", kind.name)
+		}
+		if r, g, b, _ := cells[0].Style.Fg.RGBA(); [3]uint32{r >> 8, g >> 8, b >> 8} != [3]uint32{200, 150, 0} {
+			t.Errorf("%s: fading text is in %d, %d, %d, want its own 200, 150, 0", kind.name, r>>8, g>>8, b>>8)
+		}
+		if cells[0].Style.Attrs&cellbuf.FaintAttr == 0 {
+			t.Errorf("%s: fading text isn't faint", kind.name)
+		}
 	}
 }
 

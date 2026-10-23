@@ -9,6 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/lucasb-eyer/go-colorful"
+
+	"github.com/museslabs/kyma/internal/textsize"
 )
 
 // morph carries what two slides have in common over to where the next slide
@@ -22,18 +24,46 @@ type morph struct {
 	animating bool
 	direction direction
 	scene     *scene
+	// still keeps everything where it is, which makes the morph a crossfade,
+	// see newStillScene.
+	still bool
 }
 
 // morphDuration is how long a morph takes. It runs on the clock rather than
 // counting frames, so a slow frame skips ahead instead of dragging it out, and
 // it can draw as often as the screen refreshes without changing its pace.
-const morphDuration = 600 * time.Millisecond
+// Nothing travels in a crossfade, so it takes less time.
+const (
+	morphDuration     = 600 * time.Millisecond
+	crossfadeDuration = 400 * time.Millisecond
+)
 
 // now is the clock the morph runs on.
 var now = time.Now
 
 func newMorph(int) morph {
 	return morph{}
+}
+
+// newCrossfade is a morph in which nothing moves: what is the same on both
+// slides stays, text that only changed color blends into its new one, and the
+// rest fades out while the next slide's fades in.
+func newCrossfade(int) morph {
+	return morph{still: true}
+}
+
+func (t morph) duration() time.Duration {
+	if t.still {
+		return crossfadeDuration
+	}
+	return morphDuration
+}
+
+func (t morph) newScene(prev, next string) scene {
+	if t.still {
+		return newStillScene(prev, next)
+	}
+	return newScene(prev, next)
 }
 
 func (t morph) Start(_, _ int, direction direction) Transition {
@@ -57,7 +87,7 @@ func (t morph) Update() (Transition, tea.Cmd) {
 		t.started = now()
 	}
 
-	t.progress = float64(now().Sub(t.started)) / float64(morphDuration)
+	t.progress = float64(now().Sub(t.started)) / float64(t.duration())
 	if t.progress >= 1 {
 		t.animating = false
 		t.progress = 1
@@ -69,33 +99,37 @@ func (t morph) Update() (Transition, tea.Cmd) {
 
 func (t morph) View(prev, next string) string {
 	if t.scene == nil {
-		s := newScene(prev, next)
+		s := t.newScene(prev, next)
 		return s.frame(t.progress)
 	}
 
 	// Working out what goes where means diffing both slides, so it is done
 	// once and the frames after that only draw.
 	if !t.scene.built || t.scene.prev != prev || t.scene.next != next {
-		*t.scene = newScene(prev, next)
+		*t.scene = t.newScene(prev, next)
 	}
 	return t.scene.frame(t.progress)
 }
 
 func (t morph) Name() string {
+	if t.still {
+		return "crossfade"
+	}
 	return "morph"
 }
 
 func (t morph) Opposite() Transition {
-	return newMorph(0)
+	return morph{still: t.still}
 }
 
 func (t morph) Direction() direction {
 	return t.direction
 }
 
-// The terminal's own colors. Text without a color of its own is drawn in
-// terminalFg, and what fades in or out fades from or to terminalBg. They are
-// light gray on black until SetTerminalColors says otherwise.
+// The terminal's own colors. A color that only one end of a blend has, like
+// text recolored from the terminal's default or a highlight's background that
+// goes away, blends from or to these. They are light gray on black until
+// SetTerminalColors says otherwise.
 var (
 	terminalFg = colorful.Color{R: 0.75, G: 0.75, B: 0.75}
 	terminalBg = colorful.Color{}
@@ -134,7 +168,11 @@ type scene struct {
 // A glyph is what a cell shows: a grapheme in one of the scene's styles. The
 // zero glyph is a blank.
 type glyph struct {
-	text  string
+	text string
+	// pre holds the markers scaled text leaves in front of its placeholder
+	// cells, see textsize.Block. They travel with the cell, so the text is
+	// drawn wherever its placeholder ends up whole.
+	pre   string
 	style int32
 	// width is the number of cells the grapheme takes, 2 for a wide one.
 	width int8
@@ -168,6 +206,19 @@ type move struct {
 }
 
 func newScene(prev, next string) scene {
+	return buildScene(prev, next, false)
+}
+
+// newStillScene works out a crossfade: a scene in which nothing moves. Only
+// what both slides have in the same place is matched, so it stays put, and
+// blends into its new color when it has one, the way a highlight does when it
+// moves between the lines of the same code. The rest fades out where it is
+// and the next slide fades in where it will be.
+func newStillScene(prev, next string) scene {
+	return buildScene(prev, next, true)
+}
+
+func buildScene(prev, next string, still bool) scene {
 	s := scene{prev: prev, next: next, built: true, styles: newStyles()}
 	s.width = max(frameWidth(prev), frameWidth(next))
 	s.height = max(strings.Count(prev, "\n"), strings.Count(next, "\n")) + 1
@@ -183,8 +234,10 @@ func newScene(prev, next string) scene {
 	for _, byShape := range []bool{false, true} {
 		runs.byShape = byShape
 		runs.inPlace()
-		runs.inOrder(runs.unmatched())
-		runs.nearest()
+		if !still {
+			runs.inOrder(runs.unmatched())
+			runs.nearest()
+		}
 	}
 
 	// What is left gets a second look word by word, so an edited line keeps
@@ -193,7 +246,9 @@ func newScene(prev, next string) scene {
 	wordsB, fromB := s.splitWords(runs.b, runs.bi)
 	words := newMatching(wordsA, wordsB)
 	words.inPlace()
-	words.inSimilarLines(fromA, fromB)
+	if !still {
+		words.inSimilarLines(fromA, fromB)
+	}
 
 	s.moving = append(runs.moves(), words.moves()...)
 	settle(s.moving)
@@ -209,6 +264,9 @@ func newScene(prev, next string) scene {
 	}
 
 	s.boxes = matchFrames(framesA, framesB, s.moving)
+	if still {
+		s.boxes = stayPut(s.boxes)
+	}
 	s.styles.fix()
 	return s
 }
@@ -222,6 +280,7 @@ func (s *scene) grid(frame string) []glyph {
 
 	var style int32
 	var state byte
+	var pre string
 	x, y := 0, 0
 	for len(frame) > 0 {
 		seq, width, n, newState := ansi.DecodeSequence(frame, state, p)
@@ -231,16 +290,18 @@ func (s *scene) grid(frame string) []glyph {
 		case width > 0:
 			if y < s.height && x+width <= s.width {
 				row := grid[y*s.width:]
-				row[x] = glyph{text: seq, style: style, width: int8(width)}
+				row[x] = glyph{text: seq, pre: pre, style: style, width: int8(width)}
 				for i := 1; i < width; i++ {
 					row[x+i] = glyph{rest: true}
 				}
 			}
-			x += width
+			x, pre = x+width, ""
 		case seq == "\n":
-			x, y = 0, y+1
+			x, y, pre = 0, y+1, ""
 		case seq == "\r":
 			x = 0
+		case textsize.IsMarker(seq):
+			pre += seq
 		case ansi.HasCsiPrefix(seq) && p.Command() == 'm':
 			style = s.styles.apply(style, seq, p)
 		}
@@ -250,11 +311,21 @@ func (s *scene) grid(frame string) []glyph {
 }
 
 // What only one slide has fades out over the first part of a morph and in over
-// the last, the two overlapping in the middle.
+// the last, the two overlapping in the middle. Below faintBelow it is drawn
+// faint, see styles.faint.
 const (
 	fadeOutUntil = 0.6
 	fadeInFrom   = 0.4
+	faintBelow   = 0.6
 )
+
+// dim is style at strength alpha.
+func (s *scene) dim(style int32, alpha float64) int32 {
+	if alpha < faintBelow {
+		return s.styles.faint(style)
+	}
+	return style
+}
 
 // frame draws the scene at progress p, from 0, the previous slide, to 1, the
 // next one.
@@ -279,18 +350,21 @@ func (s *scene) frame(p float64) string {
 			s.canvas.box(edges, x0, y0, max(x1, x0+1), max(y1, y0+1), style, 1)
 		case b.from != nil:
 			f := b.from
-			s.canvas.box(f.edges, f.x0, f.y0, f.x1, f.y1, s.styles.faded(f.style, leaving), leaving)
+			s.canvas.box(f.edges, f.x0, f.y0, f.x1, f.y1, s.dim(f.style, leaving), leaving)
 		default:
 			f := b.to
-			s.canvas.box(f.edges, f.x0, f.y0, f.x1, f.y1, s.styles.faded(f.style, entering), entering)
+			s.canvas.box(f.edges, f.x0, f.y0, f.x1, f.y1, s.dim(f.style, entering), entering)
 		}
 	}
 
+	// The terminal draws scaled text in its own colors, so it can't fade. What
+	// leaves is drawn until halfway and what arrives from there on, so one
+	// swaps for the other without a gap between them or an overlap.
 	for _, pc := range s.leaving {
-		s.fade(pc, leaving)
+		s.fade(pc, leaving, e < 0.5)
 	}
 	for _, pc := range s.entering {
-		s.fade(pc, entering)
+		s.fade(pc, entering, e >= 0.5)
 	}
 
 	// Moving pieces go on top, so they pass over whatever is on their way.
@@ -322,20 +396,31 @@ func (s *scene) frame(p float64) string {
 	return s.canvas.String(&s.styles)
 }
 
-// fade draws a piece that only one slide has, at strength alpha.
-func (s *scene) fade(p piece, alpha float64) {
+// fade draws a piece that only one slide has, at strength alpha. Its scaled
+// text is drawn only when scaled is set, and is otherwise left as blank cells.
+func (s *scene) fade(p piece, alpha float64, scaled bool) {
 	if alpha <= 0 {
 		return
+	}
+
+	// Scaled text that shows covers whatever else fades on its cells, the
+	// text it swaps with included, since the two can't share a placeholder.
+	strength := float32(alpha)
+	if scaled && p.scaled() {
+		strength = 1
 	}
 
 	from, style := int32(-1), int32(0)
 	x := p.x
 	for _, g := range p.glyphs {
 		if g.style != from {
-			from, style = g.style, s.styles.faded(g.style, alpha)
+			from, style = g.style, s.dim(g.style, alpha)
 		}
 		g.style = style
-		s.canvas.set(x, p.y, g, float32(alpha))
+		if !scaled {
+			g.pre = ""
+		}
+		s.canvas.set(x, p.y, g, strength)
 		x += g.cells()
 	}
 }
@@ -450,7 +535,7 @@ func (c *canvas) String(s *styles) string {
 			switch {
 			case cl.rest:
 				continue
-			case cl.text == "" && !s.shown(pen):
+			case cl.text == "" && cl.pre == "" && !s.shown(pen):
 				// A blank looks the same in any style that doesn't paint
 				// blanks, so there is no need to switch to its own.
 				c.out = append(c.out, ' ')
@@ -460,6 +545,7 @@ func (c *canvas) String(s *styles) string {
 				pen = cl.style
 			}
 
+			c.out = append(c.out, cl.pre...)
 			if cl.text == "" {
 				c.out = append(c.out, ' ')
 			} else {
