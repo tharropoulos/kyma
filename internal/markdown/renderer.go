@@ -14,6 +14,7 @@ import (
 
 	"github.com/museslabs/kyma/internal/config"
 	"github.com/museslabs/kyma/internal/img"
+	"github.com/museslabs/kyma/internal/img/placeholder"
 )
 
 // glamourMargin is the horizontal margin glamour reserves around a document,
@@ -117,7 +118,7 @@ func (r *Renderer) RenderBytes(in []byte, animating bool, width, height int) (st
 
 	// Clear kitty images
 	if !animating {
-		b.WriteString("\x1b_Ga=d\x1b\\")
+		b.WriteString(placeholder.Clear())
 	}
 
 	if err := r.renderNode(r.parser.Parse(in), animating, width, height, &b); err != nil {
@@ -209,14 +210,21 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 			imgWidth = width
 		}
 
-		limg, err := r.options.imgBackend.Render(n.Path, imgWidth, imgHeight, true)
-		if err != nil {
-			fmt.Fprintf(b, "[Error rendering image: %s]", n.Label)
+		// An image drawn as text, in symbols or in kitty's placeholders, goes
+		// wherever the text around it does, so transitions draw it as it is.
+		if symbols := r.options.imgBackend.SymbolsOnly(); symbols || placeholder.Enabled() {
+			out, err := r.options.imgBackend.Render(n.Path, imgWidth, imgHeight, symbols)
+			if err != nil {
+				fmt.Fprintf(b, "[Error rendering image: %s]", n.Label)
+				break
+			}
+			b.WriteString(out)
 			break
 		}
 
-		if r.options.imgBackend.SymbolsOnly() {
-			b.WriteString(limg)
+		limg, err := r.options.imgBackend.Render(n.Path, imgWidth, imgHeight, true)
+		if err != nil {
+			fmt.Fprintf(b, "[Error rendering image: %s]", n.Label)
 			break
 		}
 

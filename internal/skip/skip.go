@@ -5,6 +5,7 @@ package skip
 import (
 	"bytes"
 	"io"
+	"unicode"
 
 	"github.com/mattn/go-runewidth"
 	"github.com/muesli/reflow/ansi"
@@ -88,6 +89,8 @@ func (w *Writer) Write(b []byte) (int, error) {
 	}
 
 	var currentWidth uint
+	// skipped is set while the last character seen was dropped.
+	var skipped bool
 	for _, r := range string(b) {
 		if r == ansi.Marker {
 			// ANSI escape sequence
@@ -96,7 +99,13 @@ func (w *Writer) Write(b []byte) (int, error) {
 			if ansi.IsTerminator(r) {
 				w.ansi = false
 			}
+		} else if skipped && unicode.IsMark(r) {
+			// Marks combine with the character before them, so they go
+			// with it rather than onto whatever ends up before the line.
+			// Kitty's image placeholders number their cells with them.
+			continue
 		} else if currentWidth < width {
+			skipped = true
 			rw := uint(runewidth.RuneWidth(r))
 			if len(w.prefix) > 0 && currentWidth+rw >= width {
 				_, err := w.ansiWriter.Write([]byte(w.prefix))
@@ -116,6 +125,8 @@ func (w *Writer) Write(b []byte) (int, error) {
 			currentWidth += rw
 
 			continue
+		} else {
+			skipped = false
 		}
 
 		_, err := w.ansiWriter.Write([]byte(string(r)))

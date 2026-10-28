@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/museslabs/kyma/internal/config"
+	"github.com/museslabs/kyma/internal/img/placeholder"
 	"github.com/museslabs/kyma/internal/logger"
 	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui"
@@ -108,11 +109,18 @@ var rootCmd = &cobra.Command{
 		}
 
 		queryTerminalColors()
+
+		// Images upload between frames, through the same output, so that
+		// one never lands in the middle of a frame.
+		out := newSyncedOutput(os.Stdout)
+		placeholder.SetOutput(out)
+		slog.Info("Detected image placeholder support", "supported", placeholder.Enabled())
+
 		p := tea.NewProgram(
 			tui.New(root, filename),
 			tea.WithAltScreen(),
 			tea.WithMouseAllMotion(),
-			tea.WithOutput(newSyncedOutput(os.Stdout)),
+			tea.WithOutput(out),
 			tea.WithFPS(transitions.RefreshRate),
 		)
 

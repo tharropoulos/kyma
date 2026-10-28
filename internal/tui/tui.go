@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/museslabs/kyma/internal/config"
+	"github.com/museslabs/kyma/internal/img/placeholder"
 	"github.com/museslabs/kyma/internal/textsize"
 	"github.com/museslabs/kyma/internal/tui/transitions"
 )
@@ -404,17 +405,17 @@ func (m model) view() string {
 	}
 
 	if strings.Count(slideView, "\n") >= m.height {
-		fmt.Print("\x1b_Ga=d\x1b\\")
+		fmt.Print(placeholder.Clear())
 		return m.exceedScreenSizeView()
 	}
 
 	if m.command != nil && m.command.IsShowing() {
-		fmt.Print("\x1b_Ga=d\x1b\\")
+		fmt.Print(placeholder.Clear())
 		return m.command.Show(slideView, m.width, m.height)
 	}
 
 	if m.goTo != nil && m.goTo.IsShowing() {
-		fmt.Print("\x1b_Ga=d\x1b\\")
+		fmt.Print(placeholder.Clear())
 		return m.goTo.Show(slideView, m.width, m.height)
 	}
 

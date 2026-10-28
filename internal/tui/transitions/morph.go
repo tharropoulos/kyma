@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/lucasb-eyer/go-colorful"
 
+	"github.com/museslabs/kyma/internal/img/placeholder"
 	"github.com/museslabs/kyma/internal/textsize"
 )
 
@@ -357,9 +358,10 @@ func (s *scene) frame(p float64) string {
 		}
 	}
 
-	// The terminal draws scaled text in its own colors, so it can't fade. What
-	// leaves is drawn until halfway and what arrives from there on, so one
-	// swaps for the other without a gap between them or an overlap.
+	// The terminal draws scaled text in its own colors, and images as they
+	// are, so neither can fade. What leaves is drawn until halfway and what
+	// arrives from there on, so one swaps for the other without a gap between
+	// them or an overlap.
 	for _, pc := range s.leaving {
 		s.fade(pc, leaving, e < 0.5)
 	}
@@ -397,16 +399,17 @@ func (s *scene) frame(p float64) string {
 }
 
 // fade draws a piece that only one slide has, at strength alpha. Its scaled
-// text is drawn only when scaled is set, and is otherwise left as blank cells.
-func (s *scene) fade(p piece, alpha float64, scaled bool) {
+// text and images are drawn only when solid is set, and are otherwise left as
+// blank cells.
+func (s *scene) fade(p piece, alpha float64, solid bool) {
 	if alpha <= 0 {
 		return
 	}
 
-	// Scaled text that shows covers whatever else fades on its cells, the
-	// text it swaps with included, since the two can't share a placeholder.
+	// Scaled text or an image that shows covers whatever else fades on its
+	// cells, what it swaps with included, since the two can't share a cell.
 	strength := float32(alpha)
-	if scaled && p.scaled() {
+	if solid && p.solid() {
 		strength = 1
 	}
 
@@ -417,8 +420,11 @@ func (s *scene) fade(p piece, alpha float64, scaled bool) {
 			from, style = g.style, s.dim(g.style, alpha)
 		}
 		g.style = style
-		if !scaled {
+		if !solid {
 			g.pre = ""
+			if placeholder.Is(g.text) {
+				g.text = ""
+			}
 		}
 		s.canvas.set(x, p.y, g, strength)
 		x += g.cells()

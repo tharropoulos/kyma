@@ -218,6 +218,16 @@ Scaled headings move with the slide during transitions. Any letter a transition
 or overlay is cutting through is left blank until it is whole again. Only `#`
 style headings are scaled, not underlined ones.
 
+### Images
+
+In kitty and Ghostty, images are drawn with the
+[Unicode placeholders](https://sw.kovidgoyal.net/kitty/graphics-protocol/#unicode-placeholders)
+of kitty's graphics protocol, so they keep their full resolution and move with
+the slide during transitions. Other terminals, and these inside tmux, show the
+image once a transition lands and a lower resolution version of it in symbols
+while one runs. Set `KYMA_IMAGE_PLACEHOLDERS=1` or `KYMA_IMAGE_PLACEHOLDERS=0`
+to force placeholders on or off.
+
 ### Grid Layouts
 
 Split a slide into columns with `[row]` and `[col]`:

@@ -247,6 +247,18 @@ func tests() []test {
 			give:   "\x1B[38;2;249;38;114mhello你好\x1B[0m",
 			want:   "\x1B[38;2;249;38;114m… 好\x1B[0m",
 		},
+		{
+			name:  "combining marks go with the rune they follow",
+			width: 2,
+			give:  "ééé",
+			want:  "é",
+		},
+		{
+			name:  "placeholder cells lose their row and column with them",
+			width: 1,
+			give:  "\x1B[38;2;0;0;1m\U0010EEEE̅̅\U0010EEEE̅̍\x1B[39m",
+			want:  "\x1B[38;2;0;0;1m\U0010EEEE̅̍\x1B[39m",
+		},
 	}
 }
 

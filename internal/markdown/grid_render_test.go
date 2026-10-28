@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/museslabs/kyma/internal/img/placeholder"
 )
 
 // renderPlain renders in and returns it with the styling and the leading kitty
@@ -319,5 +321,37 @@ func TestRenderer_StillImageSitsWhereItMoves(t *testing.T) {
 	}
 	if moving == 0 {
 		t.Errorf("centred image starts at column 0")
+	}
+}
+
+// TestRenderer_PlaceholderImagesStayThroughTransitions: an image drawn with
+// kitty's placeholders is text, so a slide draws it the same still as it does
+// for the frames of a transition, rather than swapping it for symbols.
+func TestRenderer_PlaceholderImagesStayThroughTransitions(t *testing.T) {
+	t.Setenv("KYMA_IMAGE_PLACEHOLDERS", "1")
+	placeholder.SetOutput(&strings.Builder{})
+	t.Cleanup(func() { placeholder.SetOutput(nil) })
+
+	in := "[row]\n[col align=center]\n![logo|10x3](logo.png)\n[/col]\n[/row]"
+	r, err := NewRenderer("dark")
+	if err != nil {
+		t.Fatalf("could not construct renderer: %v", err)
+	}
+	r.options.imgBackend = fakeImages{}
+
+	still, err := r.Render(in, false, 40, 0)
+	if err != nil {
+		t.Fatalf("Render() failed: %v", err)
+	}
+	moving, err := r.Render(in, true, 40, 0)
+	if err != nil {
+		t.Fatalf("Render() failed: %v", err)
+	}
+
+	if still != moving {
+		t.Errorf("still slide is\n%q\nmoving\n%q", still, moving)
+	}
+	if !strings.Contains(moving, "\x1b_Gimage") || strings.Contains(moving, "▀") {
+		t.Errorf("transitions draw the image as\n%q\nwant it as it is", moving)
 	}
 }

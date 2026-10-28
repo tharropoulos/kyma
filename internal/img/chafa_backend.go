@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/ploMP4/chafa-go"
+
+	"github.com/museslabs/kyma/internal/img/placeholder"
 )
 
 type chafaCache struct {
@@ -89,6 +91,10 @@ func (b chafaBackend) render(path string, width, height int32, cell cellSize, sy
 		return "", err
 	}
 
+	// Images drawn with placeholders are uploaded in kitty's protocol whatever
+	// chafa makes of the terminal, see [placeholder.Draw].
+	placeholders := !symbols && placeholder.Enabled()
+
 	// Shrink the box the slide gave the image to the largest size that keeps
 	// the image's proportions, since the canvas stretches it to fill the box.
 	chafa.CalcCanvasGeometry(pixelWidth, pixelHeight, &width, &height, cell.ratio(), true, false)
@@ -106,9 +112,13 @@ func (b chafaBackend) render(path string, width, height int32, cell cellSize, sy
 	chafa.CanvasConfigSetSymbolMap(config, capabilities.symbolMap)
 	chafa.CanvasConfigSetCellGeometry(config, cell.width, cell.height)
 
-	if symbols {
+	switch {
+	case symbols:
 		chafa.CanvasConfigSetPixelMode(config, chafa.CHAFA_PIXEL_MODE_SYMBOLS)
-	} else {
+	case placeholders:
+		chafa.CanvasConfigSetPixelMode(config, chafa.CHAFA_PIXEL_MODE_KITTY)
+		chafa.CanvasConfigSetPassthrough(config, chafa.CHAFA_PASSTHROUGH_NONE)
+	default:
 		chafa.CanvasConfigSetPixelMode(config, capabilities.pixelMode)
 	}
 
@@ -125,6 +135,13 @@ func (b chafaBackend) render(path string, width, height int32, cell cellSize, sy
 	)
 	printable := chafa.CanvasPrint(canvas, nil)
 
+	if placeholders {
+		pixels, err := kittyPixels(printable.String())
+		if err != nil {
+			return "", err
+		}
+		return placeholder.Draw(pixels, int(width), int(height))
+	}
 	return printable.String(), nil
 }
 

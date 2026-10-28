@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/museslabs/kyma/internal/img/placeholder"
 )
 
 // visible reports whether a glyph shows anything: a grapheme other than a
@@ -102,15 +104,21 @@ func newPiece(x, y int, glyphs []glyph) piece {
 	// into the shape as its text, each ended by a zero byte that no text has,
 	// so two pieces only share a key or a shape glyph for glyph. The markers
 	// in front of scaled text go into both, since its placeholder cells all
-	// look the same and only the markers tell which text they stand for.
+	// look the same and only the markers tell which text they stand for. So
+	// does the style of an image's placeholder cell, whose color is the image
+	// it shows: another image is not the same one recolored.
 	var key, shape []byte
 	for _, g := range glyphs {
-		key = append(key, byte(g.style), byte(g.style>>8), byte(g.style>>16), byte(g.style>>24))
+		style := [4]byte{byte(g.style), byte(g.style >> 8), byte(g.style >> 16), byte(g.style >> 24)}
+		key = append(key, style[:]...)
 		key = append(key, g.pre...)
 		key = append(key, g.text...)
 		key = append(key, 0)
 		if g.text == "" {
 			shape = append(shape, ' ')
+		}
+		if placeholder.Is(g.text) {
+			shape = append(shape, style[:]...)
 		}
 		shape = append(shape, g.pre...)
 		shape = append(shape, g.text...)
@@ -119,10 +127,11 @@ func newPiece(x, y int, glyphs []glyph) piece {
 	return piece{x: x, y: y, glyphs: glyphs, key: string(key), shape: string(shape)}
 }
 
-// scaled reports whether the piece holds scaled text, see glyph.pre.
-func (p piece) scaled() bool {
+// solid reports whether the piece holds what the terminal draws on its own
+// and so can't fade: scaled text, see glyph.pre, or part of an image.
+func (p piece) solid() bool {
 	for _, g := range p.glyphs {
-		if g.pre != "" {
+		if g.pre != "" || placeholder.Is(g.text) {
 			return true
 		}
 	}

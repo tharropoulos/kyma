@@ -5,6 +5,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/museslabs/kyma/internal/img/placeholder"
 )
 
 type direction byte
@@ -26,7 +28,7 @@ const RefreshRate = 120
 // rather than an interval after the last one finished, so they come evenly
 // spaced and in step with the screen being redrawn at the same rate.
 func Animate(fps time.Duration) tea.Cmd {
-	fmt.Print("\x1b_Ga=d\x1b\\")
+	fmt.Print(placeholder.Clear())
 	return tea.Every(time.Second/fps, func(t time.Time) tea.Msg {
 		return FrameMsg(t)
 	})
