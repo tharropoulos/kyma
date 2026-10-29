@@ -95,6 +95,35 @@ func (m *model) navigateToSlide(newSlide *Slide) {
 	m.syncCurrentSlide()
 }
 
+// slideAt finds a slide by its number, counting from 1.
+func (m *model) slideAt(number int) *Slide {
+	if number < 1 {
+		return nil
+	}
+	slide := m.rootSlide
+	for i := 1; i < number && slide != nil; i++ {
+		slide = slide.Next
+	}
+	return slide
+}
+
+// GoToSlideMsg asks for a slide by its number, counting from 1, from outside
+// the presentation, such as with `kyma goto`.
+type GoToSlideMsg struct {
+	Number int
+}
+
+// waitForGoTo waits for a client of the sync server to ask for a slide.
+func (m model) waitForGoTo() tea.Cmd {
+	if m.syncServer == nil {
+		return nil
+	}
+	gotos := m.syncServer.GoTos()
+	return func() tea.Msg {
+		return GoToSlideMsg{Number: <-gotos}
+	}
+}
+
 // syncCurrentSlide broadcasts the current slide number to speaker notes clients
 func (m *model) syncCurrentSlide() {
 	if m.syncServer == nil {
@@ -176,6 +205,7 @@ func (m model) Init() tea.Cmd {
 		tea.Tick(time.Second, func(time.Time) tea.Msg {
 			return TimerTickMsg{}
 		}),
+		m.waitForGoTo(),
 	)
 }
 
@@ -220,6 +250,19 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		slog.Info("Key pressed", "key", keyMsg.String())
 	}
 
+	// A remote asking for a slide goes there straight away, whatever is open
+	// or still moving, since the presenter may be nowhere near the keyboard.
+	if goTo, ok := msg.(GoToSlideMsg); ok {
+		slog.Info("Remote asked for slide", "slide", goTo.Number)
+		if slide := m.slideAt(goTo.Number); slide != nil {
+			m.command, m.goTo, m.jump = nil, nil, nil
+			m.slide.ActiveTransition = nil
+			slide.ActiveTransition = nil
+			m.navigateToSlide(slide)
+		}
+		return m, m.waitForGoTo()
+	}
+
 	if m.command != nil && m.command.IsShowing() {
 		command, cmd := m.command.Update(msg)
 		m.command = &command
@@ -239,15 +282,8 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.goTo = &goTo
 
 		if goTo.Quitting() {
-			if choice := goTo.Choice(); choice > 0 {
-				// Find the slide at the specified position
-				slide := m.rootSlide
-				for i := 1; i < choice && slide != nil; i++ {
-					slide = slide.Next
-				}
-				if slide != nil {
-					m.navigateToSlide(slide)
-				}
+			if slide := m.slideAt(goTo.Choice()); slide != nil {
+				m.navigateToSlide(slide)
 			}
 			m.goTo = nil
 			return m, nil

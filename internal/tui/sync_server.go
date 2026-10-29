@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type SyncServer struct {
@@ -17,21 +18,28 @@ type SyncServer struct {
 	clientsMu    sync.Mutex
 	running      bool
 	currentSlide int
+	// gotos carries the slides clients ask for, numbered from 1.
+	gotos chan int
 }
 
 const port = 34622
 
 func NewSyncServer() (*SyncServer, error) {
-	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	return listenSync(fmt.Sprintf("127.0.0.1:%d", port))
+}
+
+func listenSync(address string) (*SyncServer, error) {
+	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on port: %w", err)
 	}
 
 	server := &SyncServer{
 		listener:     listener,
-		port:         port,
+		port:         listener.Addr().(*net.TCPAddr).Port,
 		clients:      make(map[net.Conn]struct{}),
 		currentSlide: 0,
+		gotos:        make(chan int),
 	}
 
 	return server, nil
@@ -39,6 +47,11 @@ func NewSyncServer() (*SyncServer, error) {
 
 func (s *SyncServer) GetPort() int {
 	return s.port
+}
+
+// GoTos delivers the slides clients ask for, numbered from 1.
+func (s *SyncServer) GoTos() <-chan int {
+	return s.gotos
 }
 
 func (s *SyncServer) Start() {
@@ -105,8 +118,28 @@ func (s *SyncServer) acceptConnections() error {
 			return fmt.Errorf("failed to send current slide to new client: %w", err)
 		}
 
+		go s.serve(conn)
 	}
 	return nil
+}
+
+// serve reads what a client asks for until it leaves: "GOTO:5" for the fifth
+// slide, as `kyma goto 5` sends.
+func (s *SyncServer) serve(conn net.Conn) {
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if slide, ok := strings.CutPrefix(line, "GOTO:"); ok {
+			if slideNum, err := strconv.Atoi(slide); err == nil {
+				s.gotos <- slideNum
+			}
+		}
+	}
+
+	s.clientsMu.Lock()
+	delete(s.clients, conn)
+	s.clientsMu.Unlock()
+	conn.Close()
 }
 
 type SyncClient struct {
@@ -115,7 +148,11 @@ type SyncClient struct {
 }
 
 func NewSyncClient() (*SyncClient, error) {
-	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	return dialSync(fmt.Sprintf("127.0.0.1:%d", port))
+}
+
+func dialSync(address string) (*SyncClient, error) {
+	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to sync server: %w", err)
 	}
@@ -141,6 +178,24 @@ func (c *SyncClient) ListenForSlideChanges(slideChangeChan chan<- int) {
 			}
 		}
 	}
+}
+
+// GoTo asks the presentation to show a slide, numbered from 1.
+func (c *SyncClient) GoTo(slideNum int) error {
+	if err := c.conn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		return err
+	}
+
+	// The server first sends the slide it is on. Closing the connection with
+	// that still unread would reset it, which can drop the request.
+	if _, err := bufio.NewReader(c.conn).ReadString('\n'); err != nil {
+		return fmt.Errorf("failed to read from sync server: %w", err)
+	}
+
+	if _, err := fmt.Fprintf(c.conn, "GOTO:%d\n", slideNum); err != nil {
+		return fmt.Errorf("failed to send slide to sync server: %w", err)
+	}
+	return nil
 }
 
 func (c *SyncClient) Close() {

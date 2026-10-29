@@ -73,6 +73,10 @@ func NewSlide(data string, props config.Properties) (*Slide, error) {
 }
 
 func (s *Slide) Update() (*Slide, tea.Cmd) {
+	// A frame can still arrive after jumping away from a transition.
+	if s.ActiveTransition == nil {
+		return s, nil
+	}
 	transition, cmd := s.ActiveTransition.Update()
 	s.ActiveTransition = transition
 

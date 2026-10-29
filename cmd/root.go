@@ -38,6 +38,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&notes, "notes", "n", false, "Run in speaker notes mode")
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(docsCmd)
+	rootCmd.AddCommand(gotoCmd)
 }
 
 var rootCmd = &cobra.Command{
