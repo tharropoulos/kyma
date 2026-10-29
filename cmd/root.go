@@ -39,20 +39,24 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(docsCmd)
 	rootCmd.AddCommand(gotoCmd)
+	rootCmd.AddCommand(exportCmd)
+}
+
+// markdownArg accepts a single markdown file as the arguments.
+func markdownArg(cmd *cobra.Command, args []string) error {
+	if err := cobra.ExactArgs(1)(cmd, args); err != nil {
+		return err
+	}
+
+	if filepath.Ext(args[0]) != ".md" {
+		return fmt.Errorf("expected markdown file got: %v", args[0])
+	}
+	return nil
 }
 
 var rootCmd = &cobra.Command{
-	Use: "kyma <filename>",
-	Args: func(cmd *cobra.Command, args []string) error {
-		if err := cobra.ExactArgs(1)(cmd, args); err != nil {
-			return err
-		}
-
-		if filepath.Ext(args[0]) != ".md" {
-			return fmt.Errorf("expected markdown file got: %v", args[0])
-		}
-		return nil
-	},
+	Use:  "kyma <filename>",
+	Args: markdownArg,
 	CompletionOptions: cobra.CompletionOptions{
 		DisableDefaultCmd: true,
 	},

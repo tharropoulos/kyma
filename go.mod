@@ -1,6 +1,6 @@
 module github.com/museslabs/kyma
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
@@ -18,6 +18,7 @@ require (
 	github.com/ploMP4/chafa-go v0.4.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	golang.org/x/image v0.47.0
 )
 
 require (
@@ -61,9 +62,9 @@ require (
 	github.com/yuin/goldmark v1.7.16 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sys v0.41.0
+	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.40.0
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
 
 // Local copy of chafa-go v0.4.1 with TermDbDetect passing a NULL-terminated

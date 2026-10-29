@@ -11,6 +11,13 @@ type cellSize struct {
 	width, height int32
 }
 
+// CellSize returns the size of one of the terminal's cells in pixels, or a
+// default size when the terminal doesn't say.
+func CellSize() (width, height int) {
+	c := terminalCellSize()
+	return int(c.width), int(c.height)
+}
+
 // ratio returns the cell's width divided by its height, which chafa calls the
 // font ratio.
 func (c cellSize) ratio() float32 {

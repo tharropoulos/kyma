@@ -165,6 +165,12 @@ func (s *Slide) kept(animating bool, width, height int) (string, bool) {
 	return r.view, r.ok && r.width == width && r.height == height
 }
 
+// Render draws the slide on its own, as it looks once a transition lands on
+// it, centered on a screen of width by height.
+func (s *Slide) Render(width, height int) string {
+	return s.render(s.Properties.Style.Apply(width, height), false, width, height)
+}
+
 // Prerender renders the slide for a size ahead of time: first as transitions
 // draw it and then as it looks once one lands on it, so that neither has to
 // wait for its markdown and images when the time comes. It is safe to call
