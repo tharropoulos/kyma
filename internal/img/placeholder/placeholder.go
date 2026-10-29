@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"io"
 	"os"
 	"strconv"
@@ -47,12 +48,21 @@ const unplace = "\x1b_Ga=d\x1b\\"
 var enabled atomic.Bool
 
 // uploads holds where images are uploaded to, and the id each image went up
-// under, by what went up.
+// under, by what went up. While images are kept rather than uploaded, kept
+// holds each of them, the one with id i at i-1.
 var uploads = struct {
 	sync.Mutex
-	out io.Writer
-	ids map[[sha256.Size]byte]uint32
+	out  io.Writer
+	ids  map[[sha256.Size]byte]uint32
+	keep bool
+	kept []kept
 }{ids: map[[sha256.Size]byte]uint32{}}
+
+// kept is an image kept by [Keep], and the size in cells it was drawn at.
+type kept struct {
+	img        *image.NRGBA
+	cols, rows int
+}
 
 // SetOutput sets where images are uploaded to, which draws them with
 // placeholders from then on, if the terminal supports them. A nil out places
@@ -69,7 +79,42 @@ func SetOutput(out io.Writer) {
 	uploads.out = out
 	// What went up to the last output has to go up again to this one.
 	clear(uploads.ids)
+	uploads.keep, uploads.kept = false, nil
 	enabled.Store(out != nil)
+}
+
+// Keep draws images with placeholders whatever the terminal, and keeps every
+// image instead of uploading it, for [Image] to give back. It is for frames
+// drawn somewhere other than the terminal, such as a deck exported to a file,
+// where whatever draws the frame looks the images up itself.
+func Keep() {
+	uploads.Lock()
+	defer uploads.Unlock()
+
+	uploads.out = nil
+	clear(uploads.ids)
+	uploads.keep, uploads.kept = true, nil
+	enabled.Store(true)
+}
+
+// Keeping reports whether images are kept rather than uploaded, see [Keep].
+func Keeping() bool {
+	uploads.Lock()
+	defer uploads.Unlock()
+	return uploads.keep
+}
+
+// Image returns the image kept under id, see [Keep], and the size in cells
+// that its placeholder cells cover.
+func Image(id uint32) (img *image.NRGBA, cols, rows int, ok bool) {
+	uploads.Lock()
+	defer uploads.Unlock()
+
+	if id == 0 || int(id) > len(uploads.kept) {
+		return nil, 0, 0, false
+	}
+	k := uploads.kept[id-1]
+	return k.img, k.cols, k.rows, true
 }
 
 // Enabled reports whether images are drawn with placeholders.
@@ -162,7 +207,7 @@ func upload(img *image.NRGBA, cols, rows int) (uint32, error) {
 	uploads.Lock()
 	defer uploads.Unlock()
 
-	if uploads.out == nil {
+	if uploads.out == nil && !uploads.keep {
 		return 0, errors.New("placeholders are not enabled")
 	}
 	if id, ok := uploads.ids[sum]; ok {
@@ -171,7 +216,9 @@ func upload(img *image.NRGBA, cols, rows int) (uint32, error) {
 
 	// Ids count from 1, as 0 stands for no image.
 	id := uint32(len(uploads.ids) + 1)
-	if _, err := io.WriteString(uploads.out, transmission(id, keys, pixels)); err != nil {
+	if uploads.keep {
+		uploads.kept = append(uploads.kept, kept{img: img, cols: cols, rows: rows})
+	} else if _, err := io.WriteString(uploads.out, transmission(id, keys, pixels)); err != nil {
 		return 0, err
 	}
 	uploads.ids[sum] = id
@@ -233,3 +280,34 @@ func text(ids []uint32, across, cols, rows int) string {
 func Is(grapheme string) bool {
 	return strings.HasPrefix(grapheme, cell)
 }
+
+// At reads a placeholder cell: the id of the image it shows, out of the
+// foreground color it is drawn in, and the row and column of that image's
+// cells it shows, out of its marks.
+func At(grapheme string, fg color.Color) (id uint32, row, col int, ok bool) {
+	rest, found := strings.CutPrefix(grapheme, cell)
+	if !found || fg == nil {
+		return 0, 0, 0, false
+	}
+	marks := []rune(rest)
+	if len(marks) < 2 {
+		return 0, 0, 0, false
+	}
+	row, rowOK := numbers()[marks[0]]
+	col, colOK := numbers()[marks[1]]
+	if !rowOK || !colOK {
+		return 0, 0, 0, false
+	}
+
+	r, g, b, _ := fg.RGBA()
+	return r>>8<<16 | g>>8<<8 | b>>8, row, col, true
+}
+
+// numbers maps each of the diacritics back to the number it stands for.
+var numbers = sync.OnceValue(func() map[rune]int {
+	m := make(map[rune]int, len(diacritics))
+	for i, d := range diacritics {
+		m[d] = i
+	}
+	return m
+})

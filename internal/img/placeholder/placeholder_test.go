@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"image"
+	"image/color"
 	"strings"
 	"testing"
 	"unicode"
@@ -325,4 +326,76 @@ func TestSetOutput_OnlyEnablesWhereSupported(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestKeep_KeepsImagesForTheirCells(t *testing.T) {
+	t.Setenv(envOverride, "0")
+	Keep()
+	t.Cleanup(func() { SetOutput(nil) })
+
+	if !Enabled() || !Keeping() {
+		t.Fatalf("Enabled() = %v, Keeping() = %v while keeping images, want both", Enabled(), Keeping())
+	}
+
+	img := picture(3, 2, 0)
+	cells, err := Draw(img, 3, 2)
+	if err != nil {
+		t.Fatalf("Draw() error = %v", err)
+	}
+
+	kept, cols, rows, ok := Image(1)
+	if !ok || cols != 3 || rows != 2 {
+		t.Fatalf("Image(1) = %v, %d by %d cells, want the image at 3 by 2", ok, cols, rows)
+	}
+	if !bytes.Equal(pixelsOf(kept, kept.Bounds()), img.Pix) {
+		t.Errorf("the image kept is not the one drawn")
+	}
+	if _, _, _, ok := Image(2); ok {
+		t.Errorf("Image(2) found an image that was never drawn")
+	}
+
+	// Every cell reads back as the image and the cell of it it shows.
+	for y, line := range strings.Split(cells, "\n") {
+		x := 0
+		for _, grapheme := range graphemes(line) {
+			id, row, col, ok := At(grapheme, color.RGBA{0, 0, 1, 0xff})
+			if !ok || id != 1 || row != y || col != x {
+				t.Errorf("cell %d, %d reads as image %d at %d, %d (%v)", x, y, id, col, row, ok)
+			}
+			x++
+		}
+		if x != 3 {
+			t.Errorf("row %d has %d cells, want 3", y, x)
+		}
+	}
+
+	SetOutput(nil)
+	if Keeping() {
+		t.Errorf("still keeping images after SetOutput")
+	}
+}
+
+func TestAt_RejectsOtherText(t *testing.T) {
+	for _, grapheme := range []string{"a", cell, cell + "̅"} {
+		if _, _, _, ok := At(grapheme, color.White); ok {
+			t.Errorf("At(%q) read it as a placeholder cell", grapheme)
+		}
+	}
+	if _, _, _, ok := At(cell+"̅̅", nil); ok {
+		t.Errorf("At() read a cell with no image id as a placeholder cell")
+	}
+}
+
+// graphemes returns the graphemes of a line, leaving out escape codes.
+func graphemes(line string) []string {
+	var out []string
+	var state byte
+	for line != "" {
+		seq, width, n, newState := ansi.DecodeSequence(line, state, nil)
+		state, line = newState, line[n:]
+		if width > 0 {
+			out = append(out, seq)
+		}
+	}
+	return out
 }

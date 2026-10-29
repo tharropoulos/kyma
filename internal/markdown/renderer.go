@@ -212,7 +212,9 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 
 		// An image drawn as text, in symbols or in kitty's placeholders, goes
 		// wherever the text around it does, so transitions draw it as it is.
-		if symbols := r.options.imgBackend.SymbolsOnly(); symbols || placeholder.Enabled() {
+		// Images kept to be drawn elsewhere always go in placeholders, at
+		// their full resolution, whatever this terminal can show.
+		if symbols := !placeholder.Keeping() && r.options.imgBackend.SymbolsOnly(); symbols || placeholder.Enabled() {
 			out, err := r.options.imgBackend.Render(n.Path, imgWidth, imgHeight, symbols)
 			if err != nil {
 				fmt.Fprintf(b, "[Error rendering image: %s]", n.Label)
