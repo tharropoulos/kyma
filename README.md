@@ -107,6 +107,32 @@ kyma version
 
 Presentation remotes (clickers) work out of the box: their next/previous buttons send `Page Down`/`Page Up`, the start button sends `F5` (jumps to the first slide), and the end button sends `Esc` (quits).
 
+To jump to a slide from outside the presentation, run `kyma goto <slide>` on the same machine (e.g. `kyma goto 12`). Bind it to a remote, such as a KDE Connect command, to move around without the keyboard.
+
+### Exporting to PDF
+
+```bash
+# Export every slide to presentation.pdf, a page per slide
+kyma export presentation.md
+
+# Draw text in the terminal's own font (its bold and italic files are picked up beside it)
+kyma export presentation.md --font ~/Library/Fonts/JetBrainsMonoNerdFontMono-Regular.ttf
+
+# A transparent terminal: show the wallpaper through the background
+kyma export presentation.md --wallpaper ~/Pictures/wallpaper.jpg --opacity 0.9
+```
+
+Run `kyma export` in the terminal you present from. Each slide is drawn the way that terminal shows it: at its size, in its foreground, background and palette colors, with its scaled headings, and with images at their full resolution. Kyma draws the pages itself, so no browser or other tool is needed. Pages are images, so their text can't be selected.
+
+| Flag | Description |
+| --- | --- |
+| `-o`, `--output` | Where to write the PDF (default: the presentation's name, ending in `.pdf`) |
+| `--size` | Screen size in cells, such as `160x45` (default: the current terminal's) |
+| `--scale` | Draw cells this many times larger than the terminal's, for sharper pages |
+| `--font` | Font file to draw text with. Repeat it for fallback fonts, e.g. a symbols font. Without it, text is drawn in Go Mono, with the system's fonts for what Go Mono lacks |
+| `--wallpaper` | Image (PNG, JPEG, GIF or WebP) to show through the terminal's background, which a terminal can't report itself |
+| `--opacity` | Opacity of the background over `--wallpaper` (default `0.9`). Cells with a background color of their own stay solid, as in kitty and Ghostty |
+
 ## Configuration
 
 Kyma presentations use a simple format with slides separated by `----` and optional YAML front matter for configuration.

@@ -465,6 +465,7 @@ func (m *matching) moves() []move {
 			toX:      m.b[j].x,
 			toY:      m.b[j].y,
 			to:       m.b[j].glyphs,
+			toKey:    m.b[j].key,
 			restyled: m.a[i].key != m.b[j].key,
 		})
 	}
@@ -706,11 +707,14 @@ func lcs(a, b []string) [][2]int {
 // that shortens their travel, counting one long trip as worse than two short
 // ones. Otherwise a piece that repeats, like a closing brace, can stay put
 // while its twin flies across the slide to fill in for the one that moved.
+// Pieces with the same text trade whatever their colors, so a highlight moving
+// between two copies of a line recolors each where it is instead of flying the
+// highlighted copy over to the other.
 func settle(moves []move) {
 	lookalikes := make(map[string][]*move)
 	for i := range moves {
 		m := &moves[i]
-		lookalikes[m.key] = append(lookalikes[m.key], m)
+		lookalikes[m.shape] = append(lookalikes[m.shape], m)
 	}
 
 	for _, group := range lookalikes {
@@ -724,7 +728,8 @@ func settle(moves []move) {
 						p.toX, q.toX = q.toX, p.toX
 						p.toY, q.toY = q.toY, p.toY
 						p.to, q.to = q.to, p.to
-						p.restyled, q.restyled = q.restyled, p.restyled
+						p.toKey, q.toKey = q.toKey, p.toKey
+						p.restyled, q.restyled = p.key != p.toKey, q.key != q.toKey
 						traded = true
 					}
 				}

@@ -38,6 +38,13 @@ func (r *Renderer) renderGrid(n *GridNode, animating bool, s sizing) (string, er
 		budget = s.Budget - style.GetVerticalFrameSize()
 	}
 
+	// A grid that sets its own height shares that out among its rows, rather
+	// than the space its parent offered.
+	forced := resolveSize(n.Size, budget)
+	if forced > 0 {
+		budget = forced
+	}
+
 	rows := n.Children()
 	if len(rows) == 0 {
 		return style.Render(fitBlock("", inner, 0, AlignDefault, AlignDefault, true)), nil
@@ -84,7 +91,7 @@ func (r *Renderer) renderGrid(n *GridNode, animating bool, s sizing) (string, er
 	}
 
 	height := sum(heights) + n.Gap*(len(rows)-1)
-	if forced := resolveSize(n.Size, budget); forced > 0 {
+	if forced > 0 {
 		height = forced
 	}
 	if s.Height > 0 {

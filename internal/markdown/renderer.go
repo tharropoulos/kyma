@@ -7,7 +7,6 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
-	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -252,14 +251,9 @@ func (r *Renderer) renderNode(n Node, animating bool, width, height int, b *stri
 
 		var renderedContent string
 		if n.Language != "" {
-			lexer := lexers.Get(n.Language)
-			if lexer == nil {
-				lexer = lexers.Fallback
-			}
-			lexer = chroma.Coalesce(lexer)
 			style := config.GetChromaStyle(r.options.theme)
 
-			renderedContent = r.renderHighlightedCode(n.Code, lines, n, lexer, style)
+			renderedContent = r.renderHighlightedCode(n.Code, lines, n, codeLexer(n.Language), style)
 		} else {
 			renderedContent = r.renderPlainCode(lines, n)
 		}

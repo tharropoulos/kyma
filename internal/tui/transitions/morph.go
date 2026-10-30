@@ -200,9 +200,10 @@ type piece struct {
 type move struct {
 	piece
 	toX, toY int
-	// to is the piece as the next slide has it: the same text, and in other
-	// styles when restyled is set.
+	// to is the piece as the next slide has it, and toKey its key: the same
+	// text, and in other styles when restyled is set.
 	to       []glyph
+	toKey    string
 	restyled bool
 }
 

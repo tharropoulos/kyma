@@ -49,14 +49,39 @@ func (r *Renderer) renderHeading(n *HeadingNode, _ bool, width int, b *strings.B
 		b.WriteString("\n")
 	}
 
+	// The column only moves the heading as a whole, see [blockIndent], so the
+	// lines a heading wraps to are aligned against its widest one here.
+	widest := 0
 	for _, l := range lines {
-		pad := strings.Repeat(" ", room-scale*l.width)
+		widest = max(widest, l.width)
+	}
+
+	for _, l := range lines {
+		indent := 0
+		switch headingAlign(n) {
+		case AlignCenter:
+			indent = scale * (widest - l.width) / 2
+		case AlignEnd:
+			indent = scale * (widest - l.width)
+		}
+
+		lead := strings.Repeat(" ", indent)
+		pad := strings.Repeat(" ", room-scale*l.width-indent)
 		for _, row := range textsize.Block(l.text, scale) {
-			b.WriteString(l.margin + row + pad + "\n")
+			b.WriteString(l.margin + lead + row + pad + "\n")
 		}
 	}
 
 	return nil
+}
+
+// headingAlign is how the column a heading sits in aligns its content. A
+// heading placed directly on a slide is aligned by the slide's layout instead.
+func headingAlign(n *HeadingNode) Align {
+	if col, ok := n.Parent().(*GridColumnNode); ok {
+		return col.Align
+	}
+	return AlignDefault
 }
 
 // headingLine is one line of a heading as glamour styled it, split into the

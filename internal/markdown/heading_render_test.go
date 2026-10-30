@@ -93,6 +93,54 @@ func TestRenderer_HeadingTooNarrowToScale(t *testing.T) {
 	}
 }
 
+func TestRenderer_HeadingAlignsEveryLine(t *testing.T) {
+	const width = 40
+
+	tests := []struct {
+		align string
+		// gaps returns the cells a line should leave either side of its text
+		// that have to match.
+		gaps func(left, right int) (int, int)
+	}{
+		{align: "center", gaps: func(left, right int) (int, int) { return left, right }},
+		{align: "right", gaps: func(_, right int) (int, int) { return right, 0 }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.align, func(t *testing.T) {
+			r, err := NewRenderer("notty", WithFontSize(map[int]int{1: 2}))
+			if err != nil {
+				t.Fatalf("NewRenderer() failed: %v", err)
+			}
+
+			in := "[row]\n[col align=" + tt.align + "]\n# Autocomplete went where?\n[/col]\n[/row]"
+			out, err := r.Render(in, false, width, 20)
+			if err != nil {
+				t.Fatalf("Render() failed: %v", err)
+			}
+
+			var lines []string
+			for _, line := range strings.Split(ansi.Strip(out), "\n") {
+				if strings.Trim(line, " ") != "" {
+					lines = append(lines, line)
+				}
+			}
+			if len(lines) < 4 {
+				t.Fatalf("heading did not wrap to two scaled lines:\n%s", strings.Join(lines, "\n"))
+			}
+
+			for i, line := range lines {
+				text := strings.Trim(line, " ")
+				left := len(line) - len(strings.TrimLeft(line, " "))
+				right := width - left - ansi.StringWidth(text)
+				if a, b := tt.gaps(left, right); a-b > 1 || b-a > 1 {
+					t.Errorf("line %d is not aligned %s, %d cells left and %d right:\n%s", i, tt.align, left, right, strings.Join(lines, "\n"))
+				}
+			}
+		})
+	}
+}
+
 func TestInkWidth(t *testing.T) {
 	tests := []struct {
 		name string

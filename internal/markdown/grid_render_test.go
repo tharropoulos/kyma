@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -216,6 +217,33 @@ func TestRenderer_GridHeight(t *testing.T) {
 				t.Errorf("rendered %d lines, want %d:\n%s", got, tt.want, strings.Join(lines, "\n"))
 			}
 		})
+	}
+}
+
+// A grid that sets its own height shares that height among its rows, not the
+// slide's, so a span fills what is left of the grid and nothing is cut off.
+func TestRenderer_GridSharesItsOwnHeight(t *testing.T) {
+	in := "[grid height=10]\n[row]top[/row]\n" +
+		"[row span=1]\n[col valign=middle]MID[/col]\n[/row]\n" +
+		"[row]END[/row]\n[/grid]"
+
+	lines := renderPlain(t, in, 60, 30)
+	if len(lines) != 10 {
+		t.Fatalf("rendered %d lines, want 10:\n%s", len(lines), strings.Join(lines, "\n"))
+	}
+
+	// The span gets the 8 lines between the two plain rows, and centres in
+	// them.
+	at := map[string]int{}
+	for i, line := range lines {
+		for _, marker := range []string{"top", "MID", "END"} {
+			if strings.Contains(line, marker) {
+				at[marker] = i
+			}
+		}
+	}
+	if want := map[string]int{"top": 0, "MID": 4, "END": 9}; !maps.Equal(at, want) {
+		t.Errorf("rows are on lines %v, want %v:\n%s", at, want, strings.Join(lines, "\n"))
 	}
 }
 

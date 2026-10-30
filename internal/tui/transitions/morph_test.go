@@ -406,6 +406,28 @@ func TestMorph_RepeatedLinesMoveTogether(t *testing.T) {
 	}
 }
 
+// A highlight moving between two copies of the same line recolors both where
+// they are, rather than flying the highlighted copy over to the other one.
+func TestMorph_HighlightStaysOnRepeatedLines(t *testing.T) {
+	const hi, dim, reset = "\x1b[33m", "\x1b[90m", "\x1b[0m"
+	prev := slide(6, hi+"a"+reset, hi+"same"+reset, dim+"b"+reset, dim+"same"+reset)
+	next := slide(6, dim+"a"+reset, dim+"same"+reset, hi+"b"+reset, hi+"same"+reset)
+	s := newScene(prev, next)
+
+	if len(s.moving) != 4 {
+		t.Fatalf("moving %q, want all four lines", moveTexts(s))
+	}
+	for _, m := range s.moving {
+		if m.toX != m.x || m.toY != m.y {
+			t.Errorf("%q moves from %d,%d to %d,%d, want it to stay",
+				text(m.glyphs), m.x, m.y, m.toX, m.toY)
+		}
+		if !m.restyled {
+			t.Errorf("%q at %d,%d keeps its color, want it restyled", text(m.glyphs), m.x, m.y)
+		}
+	}
+}
+
 func TestMorph_EditedLineKeepsItsWords(t *testing.T) {
 	prev := slide(24, "", "x := compute(a)", "")
 	next := slide(24, "", "x, err := compute(a)", "")
