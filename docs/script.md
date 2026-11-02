@@ -238,7 +238,7 @@ So here's my advice: use the least wizardry that makes the wrong call impossible
 
 That's everything. Thank you! *[pause for applause]*
 
-On the left are some places to keep practicing, plus the Doom video and Reylo. Some of today's puzzles were inspired by TypeHero. My GitHub and my site are on the right.
+Scan the QR on the left for the slides and every link, Doom video included. Some of today's puzzles were inspired by TypeHero. My GitHub and my site are on the right.
 
 I'd love to take your questions. The weirder the type, the better.
 

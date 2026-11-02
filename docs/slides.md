@@ -17,7 +17,6 @@ notes: |
 ----
 ---
 title: "A little about me"
-transition: slideUp
 style:
   border: hidden
   theme: /Users/fanis/.cache/phonto/kyma.json
@@ -2824,7 +2823,7 @@ notes: |
   **Thank you. Questions?**  ·  until 22:45
 
   - That's everything, thank you
-  - Links on the left to keep practicing, plus the Doom video and Reylo
+  - QR on the left: the slides and every link, Doom video included
   - Some of today's puzzles were inspired by TypeHero
   - My GitHub and site on the right
 
@@ -2867,18 +2866,23 @@ notes: |
 [grid gap=1]
 [row]
 [col align=left]
-*LEARN MORE / keep practicing*
+*SLIDES & LINKS / scan me*
 [/col]
 [/row]
-[row]
-[col align=left]
+[row gap=3]
+[col width=36 valign=middle]
+![QR code for the slides and links|36x18](gist_qr.png)
+[/col]
+[col align=left valign=middle]
 ```text{1-99}
-TypeHero             typehero.dev
-Type Challenges      github.com/type-challenges/type-challenges
-TypeScript Handbook  typescriptlang.org/docs/handbook/2/
-                     types-from-types.html
-Doom in types        youtu.be/0mCsluv5FXA
-Reylo                reylo.dev
+The slides, as a PDF
+TypeHero
+Type Challenges
+TypeScript Handbook
+TypeScript types can run DOOM
+Michigan TypeScript
+Reylo
+ArkType
 ```
 [/col]
 [/row]
